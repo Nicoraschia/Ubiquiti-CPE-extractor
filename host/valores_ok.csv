@@ -1,0 +1,89 @@
+10.20.1.23,resolv.host.1.name,Samue Larancibia
+10.20.1.23,tshaper.1.input.rate,3100
+10.20.1.23,tshaper.1.output.rate,10100
+10.20.1.23,wireless.1.ssid,VeRaCom-AN2-Norte
+10.20.1.25,resolv.host.1.name,Esteban Llampa
+10.20.1.25,tshaper.1.input.rate,3200
+10.20.1.25,tshaper.1.output.rate,6300
+10.20.1.25,wireless.1.ssid,AN2_SO
+10.20.1.26,resolv.host.1.name,Rocio Flores
+10.20.1.26,tshaper.1.input.rate,2500
+10.20.1.26,tshaper.1.output.rate,4100
+10.20.1.26,wireless.1.ssid,VERNET_VICTORIA
+10.20.1.27,resolv.host.1.name,Matias_Rios
+10.20.1.27,tshaper.1.input.rate,2100
+10.20.1.27,tshaper.1.output.rate,4100
+10.20.1.27,wireless.1.ssid,AN1_NO
+10.20.1.28,resolv.host.1.name,Mario zabala ex michalik
+10.20.1.28,tshaper.1.input.rate,5500
+10.20.1.28,tshaper.1.output.rate,10200
+10.20.1.28,wireless.1.ssid,VERNET_VICTORIA
+10.20.1.29,resolv.host.1.name,Emiliano Inojosa
+10.20.1.29,tshaper.1.input.rate,3100
+10.20.1.29,tshaper.1.output.rate,4200
+10.20.1.29,wireless.1.ssid,Panel OE 1 - Victoria
+10.20.1.30,resolv.host.1.name,Gonzales Diego 
+10.20.1.30,tshaper.1.input.rate,20200
+10.20.1.30,tshaper.1.output.rate,20200
+10.20.1.30,wireless.1.ssid,VERNET_AN2_E
+10.20.1.33,resolv.host.1.name,Blanca Godoy
+10.20.1.33,tshaper.1.input.rate,21500
+10.20.1.33,tshaper.1.output.rate,21500
+10.20.1.33,wireless.1.ssid,VeRaCom-AN2-Norte
+10.20.1.34,resolv.host.1.name,Carlos Cruz
+10.20.1.34,tshaper.1.input.rate,2100
+10.20.1.34,tshaper.1.output.rate,4100
+10.20.1.34,wireless.1.ssid,Malvinas_Victoria
+10.20.1.35,resolv.host.1.name,Wiliam contrera
+10.20.1.35,tshaper.1.input.rate,3000
+10.20.1.35,tshaper.1.output.rate,6100
+10.20.1.35,wireless.1.ssid,Panel OE 1 - Victoria
+10.20.1.36,resolv.host.1.name,Janet Peralta
+10.20.1.36,tshaper.1.input.rate,3100
+10.20.1.36,tshaper.1.output.rate,6200
+10.20.1.36,wireless.1.ssid,AN2_SO
+10.20.1.37,resolv.host.1.name,Nestor Gomez
+10.20.1.37,tshaper.1.input.rate,2500
+10.20.1.37,tshaper.1.output.rate,4100
+10.20.1.37,wireless.1.ssid,Panel OE 1 - Victoria
+10.20.1.38,resolv.host.1.name,Armando Garay
+10.20.1.38,tshaper.1.input.rate,2100
+10.20.1.38,tshaper.1.output.rate,4100
+10.20.1.38,wireless.1.ssid,AN2_SO
+10.20.1.39,resolv.host.1.name,Alberto Mor�n
+10.20.1.39,tshaper.1.input.rate,6100
+10.20.1.39,tshaper.1.output.rate,10200
+10.20.1.39,wireless.1.ssid,AN2_NO
+10.20.1.40,resolv.host.1.name,Roxana Nancy Pi�as
+10.20.1.40,tshaper.1.input.rate,15200
+10.20.1.40,tshaper.1.output.rate,15200
+10.20.1.40,wireless.1.ssid,VERNET_VICTORIA
+10.20.1.41,resolv.host.1.name,Adan Maya
+10.20.1.41,tshaper.1.input.rate,4100
+10.20.1.41,tshaper.1.output.rate,10200
+10.20.1.41,wireless.1.ssid,AN1_NO10.20.1.44,resolv.host.1.name,Guillermo Castillo
+10.20.1.44,tshaper.1.input.rate,2100
+10.20.1.44,tshaper.1.output.rate,4100
+10.20.1.44,wireless.1.ssid,AN1_NO
+10.20.1.45,resolv.host.1.name,Lorena Alvarado
+10.20.1.45,tshaper.1.input.rate,5000
+10.20.1.45,tshaper.1.output.rate,6100
+10.20.1.45,wireless.1.ssid,VERNET_VICTORIA
+10.20.1.46,resolv.host.1.name,Ivan Pinilla
+10.20.1.46,tshaper.1.input.rate,4100
+10.20.1.46,tshaper.1.output.rate,9100
+10.20.1.46,wireless.1.ssid,AN2_SO
+10.20.1.47,resolv.host.1.name,Patricia Castillo
+10.20.1.47,tshaper.1.input.rate,5100
+10.20.1.47,tshaper.1.output.rate,10200
+10.20.1.47,wireless.1.ssid,VERNET_VICTORIA
+10.20.1.48,resolv.host.1.name,PABLO GRANELI
+10.20.1.48,tshaper.1.input.rate,4200
+10.20.1.48,tshaper.1.output.rate,6500
+10.20.1.48,wireless.1.ssid,AN2_SO
+10.20.1.49,resolv.host.1.name,VERNET_AN1_NO
+10.20.1.49,wireless.1.ssid,AN1_NO
+10.20.1.50,resolv.host.1.name,Claudio Chavez
+10.20.1.50,tshaper.1.input.rate,4100
+10.20.1.50,tshaper.1.output.rate,10200
+10.20.1.50,wireless.1.ssid,AN2_NO
