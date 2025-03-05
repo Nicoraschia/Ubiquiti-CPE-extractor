@@ -1,3 +1,8 @@
+#Archivo para extraer que lista de leases de los CPE,para saber que equipos hay conectados en la LAN -  ubiquiti AIRos
+#by Nicolas Raschia - Mendoza 2025
+#
+#
+
 import csv
 import paramiko
 import getpass
