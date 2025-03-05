@@ -1,3 +1,11 @@
+# Descripción: Script para extraer la lista de clientes conectados a un AP Ubiquiti y guardarla en archivos CSV con los datos:
+#  Hostname,Platform,IP del CPE y MAC Address
+#
+#
+#
+
+
+
 import csv
 import json
 import paramiko
@@ -20,14 +28,13 @@ def execute_command(ssh, command):
     return stdout.read().decode()
 
 def extract_data(json_data):
-    """Extrae los datos JSON devueltos por el comando y los convierte en una lista."""
     try:
         devices = json.loads(json_data)
         extracted_data = []
         for device in devices:
             remote = device.get("remote", {})
             hostname = remote.get("hostname", "Unknown")
-            platform = device.get("platform", "Unknown")
+            platform = remote.get("platform", "Unknown")
             lastip = device.get("lastip", "Unknown")
             mac = device.get("mac", "Unknown")
             extracted_data.append([hostname, platform, lastip, mac])

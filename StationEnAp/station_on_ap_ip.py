@@ -28,7 +28,7 @@ def extract_data(json_data):
     for device in devices:
         remote = device.get("remote")
         hostname = remote.get("hostname")
-        platform = device.get("platform")
+        platform = remote.get("platform")
         lastip = device.get("lastip")
         mac = device.get("mac")
         extracted_data.append([hostname, platform, lastip, mac])
