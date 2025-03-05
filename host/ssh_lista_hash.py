@@ -3,7 +3,11 @@ import getpass
 import hashlib
 import paramiko
 
-# Ruta del archivo remoto
+
+#Archivo para sacar que euqipos hay conectado detras de un CPE 
+
+
+# Ruta del archivo remotopy
 ruta_remota = '/tmp/system.cfg'
 
 # Ruta del archivo CSV de salida

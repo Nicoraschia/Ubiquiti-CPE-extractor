@@ -1,7 +1,16 @@
+#
+#
+# Uso: python station_on_ap_ip.py <dirección IP>
+#
+#
+#
+
 import csv
 import json
 import paramiko
 import sys
+
+
 
 def ssh_connect(hostname, username, password):
     ssh = paramiko.SSHClient()
