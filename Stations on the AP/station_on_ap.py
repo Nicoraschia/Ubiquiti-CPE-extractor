@@ -65,8 +65,8 @@ def main():
         return
 
     # Solicitar usuario y contraseña de manera segura
-    username = input("👤 Ingresa tu usuario: ")
-    password = getpass.getpass("🔑 Ingresa tu contraseña: ")
+    username = input("Ingresa tu usuario: ")
+    password = getpass.getpass("Ingresa tu contraseña: ")
 
     command = "wstalist"
 
