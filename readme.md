@@ -17,11 +17,11 @@ El script extrae la siguiente información de cada dispositivo:
 
 ### Archivos 
 ```
-StationEnAp/
+Stations on the AP/
 │── hosts.txt
 │── station_on_ap.py
 │── station_on_ap_ip.py
-host/
+Cpe_leases/
 │── hosts.txt
 │── ssh_lista_leases.py
 ```
@@ -69,7 +69,7 @@ pip install paramiko
 - En caso de problemas de conexión, se mostrará un mensaje de error en la terminal.
 
 ## Créditos 
-Este script fue desarrollado por Nicolas Raschia.  
+Nicolas Raschia - 2025.  VERNET INTERNET
 Si tienes preguntas o sugerencias, puedes contactarme en nico.otroletravaladna@gmail.com .
 
 
