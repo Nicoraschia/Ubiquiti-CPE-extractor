@@ -4,12 +4,13 @@
 #
 # By Nicolas Raschia - 2025
 
-
-
 import csv
 import json
 import paramiko
 import getpass
+
+# Configuración: True para generar un CSV por host, False para un solo CSV
+generar_csv_por_host = False
 
 def ssh_connect(hostname, username, password):
     """Establece una conexión SSH con el host especificado."""
@@ -23,11 +24,10 @@ def ssh_connect(hostname, username, password):
         return None
 
 def execute_command(ssh, command):
-    """Ejecuta un comando en el dispositivo remoto y devuelve la salida."""
     stdin, stdout, stderr = ssh.exec_command(command)
     return stdout.read().decode()
 
-def extract_data(json_data):
+def extract_data(json_data, host_ip):
     try:
         devices = json.loads(json_data)
         extracted_data = []
@@ -37,7 +37,7 @@ def extract_data(json_data):
             platform = remote.get("platform", "Unknown")
             lastip = device.get("lastip", "Unknown")
             mac = device.get("mac", "Unknown")
-            extracted_data.append([hostname, platform, lastip, mac])
+            extracted_data.append([host_ip, hostname, platform, lastip, mac])
         return extracted_data
     except json.JSONDecodeError:
         print("⚠️ Error al analizar JSON. Verifique la salida del comando.")
@@ -47,7 +47,7 @@ def save_to_csv(data, filename):
     """Guarda los datos extraídos en un archivo CSV."""
     with open(filename, "w", newline="") as csv_file:
         writer = csv.writer(csv_file)
-        writer.writerow(["Hostname", "Platform", "Last IP", "MAC"])
+        writer.writerow(["IP AP", "Hostname", "Platform", "Last IP", "MAC"]) 
         writer.writerows(data)
     print(f"✅ Datos guardados en {filename}")
 
@@ -69,6 +69,7 @@ def main():
     password = getpass.getpass("Ingresa tu contraseña: ")
 
     command = "wstalist"
+    all_data = []
 
     for hostname in hosts:
         print(f"🔄 Conectando a {hostname}...")
@@ -76,15 +77,21 @@ def main():
         
         if ssh:
             command_output = execute_command(ssh, command)
-            extracted_data = extract_data(command_output)
+            extracted_data = extract_data(command_output, hostname) 
             
             if extracted_data:
-                csv_filename = f"{hostname}.csv"  # Archivo CSV por cada IP
-                save_to_csv(extracted_data, csv_filename)
+                if generar_csv_por_host:
+                    csv_filename = f"{hostname}.csv" 
+                    save_to_csv(extracted_data, csv_filename)
+                else:
+                    all_data.extend(extracted_data)
             
             ssh.close()
         else:
             print(f"⚠️ No se pudo conectar a {hostname}")
+    
+    if not generar_csv_por_host and all_data:
+        save_to_csv(all_data, "stations_data.csv")  # Un solo CSV consolidado > Seleccionar al principio
 
 if __name__ == "__main__":
     main()

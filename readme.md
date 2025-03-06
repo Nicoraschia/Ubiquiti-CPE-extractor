@@ -69,7 +69,7 @@ pip install paramiko
 - En caso de problemas de conexión, se mostrará un mensaje de error en la terminal.
 
 ## Créditos 
-Nicolas Raschia - 2025.  VERNET INTERNET
+Nicolas Raschia - 2025 - VERNET INTERNET.  
 Si tienes preguntas o sugerencias, puedes contactarme en nico.otroletravaladna@gmail.com .
 
 
