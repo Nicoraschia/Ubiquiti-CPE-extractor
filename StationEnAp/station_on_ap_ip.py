@@ -1,6 +1,6 @@
 #
 #
-# Uso: python station_on_ap_ip.py <dirección IP>
+# Comando para Ejecutar: python station_on_ap_ip.py <dirección IP de AP>
 #
 #
 #
@@ -43,7 +43,7 @@ def save_to_csv(data, filename):
 def main():
     if len(sys.argv) != 2:
         print("Debe proporcionar la dirección IP del hostname como argumento.")
-        print("Uso: python script.py <dirección IP>")
+        print("Uso: python station_on_ap_ip.py <dirección IP>")
         return
 
     ip_address = sys.argv[1]
