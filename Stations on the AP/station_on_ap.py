@@ -2,7 +2,7 @@
 #  Hostname,Platform,IP del CPE y MAC Address
 #
 #
-# By Nicolas Raschia - 2025
+# By Nicolas Raschia  - 2025
 
 import csv
 import json
