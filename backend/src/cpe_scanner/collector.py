@@ -42,21 +42,48 @@ def _mac(value: str | None) -> str | None:
     return value or None
 
 
-def collect(host: str, username: str, password: str, timeout: float = 10) -> dict:
+Credential = tuple[str, str]
+
+
+def _connect(host: str, creds: list[Credential], first: int | None, timeout: float) -> tuple[paramiko.SSHClient, int]:
+    """Prueba las credenciales en orden (empezando por `first`, la que funciono antes).
+
+    Devuelve (cliente, slot 1-based). Solo un fallo de autenticacion pasa a la siguiente;
+    timeouts o conexion rechazada cortan, porque otra clave no los arregla.
+    """
+    order = list(range(len(creds)))
+    if first is not None and 1 <= first <= len(creds):
+        order.remove(first - 1)
+        order.insert(0, first - 1)
+    for i in order:
+        # Cliente nuevo por intento: dropbear corta la sesion tras un auth fallido.
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            ssh.connect(
+                host,
+                username=creds[i][0],
+                password=creds[i][1],
+                timeout=timeout,
+                banner_timeout=timeout,
+                auth_timeout=timeout,
+                look_for_keys=False,
+                allow_agent=False,
+            )
+            return ssh, i + 1
+        except paramiko.AuthenticationException:
+            ssh.close()
+        except BaseException:
+            ssh.close()
+            raise
+    raise paramiko.AuthenticationException(f"ninguna credencial funciono ({len(creds)} probadas)")
+
+
+def collect(host: str, creds: list[Credential], first: int | None = None, timeout: float = 10) -> dict:
     """Devuelve {'host', 'ok', ...}. Nunca lanza por errores de red o SSH."""
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh = None
     try:
-        ssh.connect(
-            host,
-            username=username,
-            password=password,
-            timeout=timeout,
-            banner_timeout=timeout,
-            auth_timeout=timeout,
-            look_for_keys=False,
-            allow_agent=False,
-        )
+        ssh, slot = _connect(host, creds, first, timeout)
         mca = parse_mca_status(_run(ssh, "mca-status", timeout))
         cfg = parse_system_cfg(_run(ssh, "cat /tmp/system.cfg", timeout))
         role = classify_role(mca, cfg)
@@ -67,6 +94,7 @@ def collect(host: str, username: str, password: str, timeout: float = 10) -> dic
         result = {
             "host": host,
             "ok": True,
+            "cred_slot": slot,
             "role": role,
             "mac": wlan_mac or _mac(mca.get("deviceId")),
             "device_id": _mac(mca.get("deviceId")),
@@ -92,4 +120,5 @@ def collect(host: str, username: str, password: str, timeout: float = 10) -> dic
     except (paramiko.SSHException, OSError) as e:
         return {"host": host, "ok": False, "error": f"{type(e).__name__}: {e}"}
     finally:
-        ssh.close()
+        if ssh is not None:
+            ssh.close()

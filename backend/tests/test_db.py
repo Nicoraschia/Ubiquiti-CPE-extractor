@@ -36,13 +36,13 @@ def _station(**over):
 
 
 def _ap(stations):
-    return dict(host="192.168.15.205", ok=True, role="ap", mac=AP_MAC, device_id=AP_MAC, name="AP_TEST",
+    return dict(host="192.168.15.205", ok=True, cred_slot=1, role="ap", mac=AP_MAC, device_id=AP_MAC, name="AP_TEST",
                 platform="Rocket 5AC Lite", firmware="XC.v8.7.12", ap_mac=None, signal=-56, ssid="AP-TEST",
                 netmode="bridge", shaper_in=None, shaper_out=None, config={}, stations=stations)
 
 
 def _cpe(**over):
-    c = dict(host="192.168.15.115", ok=True, role="cpe", mac=CPE_MAC, device_id="70:a7:41:1c:84:4a",
+    c = dict(host="192.168.15.115", ok=True, cred_slot=2, role="cpe", mac=CPE_MAC, device_id="70:a7:41:1c:84:4a",
              name="CLIENTE_1_SSH", platform="NanoStation 5AC", firmware="WA.v8.7.12", ap_mac=AP_MAC,
              signal=-48, ssid="AP-TEST", netmode="router", shaper_in=10000, shaper_out=5000,
              config={"netmode": "router"},
@@ -90,6 +90,15 @@ def test_failed_host_goes_to_scan_errors(conn):
         ("192.168.15.9", "TimeoutError: timed out")
     ]
     assert conn.execute("SELECT count(*) FROM devices").fetchone()[0] == 0
+
+
+def test_cred_slot_is_remembered_by_ip(conn):
+    from cpe_scanner import db
+
+    scan = db.start_scan(conn, None)
+    db.save_result(conn, scan, _ap([_station()]))
+    db.save_result(conn, scan, _cpe())
+    assert db.cred_slots_by_ip(conn) == {"192.168.15.205": 1, "192.168.15.115": 2}
 
 
 def test_list_devices_search_by_model_and_ap(conn):

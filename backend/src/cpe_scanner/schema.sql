@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS devices (
     last_seen     timestamptz NOT NULL DEFAULT now(),
     last_scan_id  int REFERENCES scans(id) ON DELETE SET NULL
 );
+-- Credencial (1-based, orden de SCAN_USER / SCAN_USER_2 / ...) que funciono la ultima vez.
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS cred_slot int;
 CREATE INDEX IF NOT EXISTS devices_ap_mac_idx ON devices (ap_mac);
 CREATE INDEX IF NOT EXISTS devices_ip_idx ON devices (ip);
 

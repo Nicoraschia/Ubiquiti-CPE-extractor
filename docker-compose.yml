@@ -26,6 +26,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       SCAN_USER: ${SCAN_USER:-}
       SCAN_PASSWORD: ${SCAN_PASSWORD:-}
+      SCAN_USER_2: ${SCAN_USER_2:-}
+      SCAN_PASSWORD_2: ${SCAN_PASSWORD_2:-}
     depends_on:
       db:
         condition: service_healthy

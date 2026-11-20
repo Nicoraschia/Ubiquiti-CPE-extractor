@@ -9,16 +9,23 @@ from concurrent.futures import ThreadPoolExecutor
 from .collector import collect
 
 
-def _credentials() -> tuple[str, str]:
-    user = os.environ.get("SCAN_USER") or input("Usuario: ")
-    password = os.environ.get("SCAN_PASSWORD") or getpass.getpass("Contraseña: ")
-    return user, password
+def _credentials() -> list[tuple[str, str]]:
+    """SCAN_USER/SCAN_PASSWORD es la 1; SCAN_USER_2/SCAN_PASSWORD_2, la 2; y asi."""
+    creds = []
+    for suffix in ["", *(f"_{n}" for n in range(2, 10))]:
+        user, password = os.environ.get(f"SCAN_USER{suffix}"), os.environ.get(f"SCAN_PASSWORD{suffix}")
+        if user and password:
+            creds.append((user, password))
+    if not creds:
+        creds.append((input("Usuario: "), getpass.getpass("Contraseña: ")))
+    return creds
 
 
-def _collect_all(hosts: list[str], workers: int):
-    user, password = _credentials()
+def _collect_all(hosts: list[str], workers: int, preferred: dict[str, int] | None = None):
+    creds = _credentials()
+    preferred = preferred or {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        yield from pool.map(lambda h: collect(h, user, password), hosts)
+        yield from pool.map(lambda h: collect(h, creds, preferred.get(h)), hosts)
 
 
 def cmd_probe(args) -> None:
@@ -63,7 +70,7 @@ def cmd_scan(args) -> None:
             alive = discover(cidr)
             print(f"[scan {scan_id}] {cidr} ({name or '-'}): {len(alive)} hosts con SSH", flush=True)
             ok = failed = 0
-            for r in _collect_all(alive, args.workers):
+            for r in _collect_all(alive, args.workers, db.cred_slots_by_ip(conn)):
                 db.save_result(conn, scan_id, r)
                 if r["ok"] and r.get("mac"):
                     ok += 1

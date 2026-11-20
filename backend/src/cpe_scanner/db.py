@@ -51,10 +51,12 @@ def finish_scan(conn: psycopg.Connection, scan_id: int, alive: int, ok: int, fai
 # Un equipo escaneado por SSH es la fuente de verdad: pisa todos los campos.
 _UPSERT_SSH = """
 INSERT INTO devices (mac, device_id, ip, role, name, platform, firmware, ssid, ap_mac, signal,
-                     netmode, shaper_in, shaper_out, config, source, last_seen, last_scan_id)
+                     netmode, shaper_in, shaper_out, config, cred_slot, source, last_seen, last_scan_id)
 VALUES (%(mac)s, %(device_id)s, %(ip)s, %(role)s, %(name)s, %(platform)s, %(firmware)s, %(ssid)s,
-        %(ap_mac)s, %(signal)s, %(netmode)s, %(shaper_in)s, %(shaper_out)s, %(config)s, 'ssh', now(), %(scan_id)s)
+        %(ap_mac)s, %(signal)s, %(netmode)s, %(shaper_in)s, %(shaper_out)s, %(config)s, %(cred_slot)s,
+        'ssh', now(), %(scan_id)s)
 ON CONFLICT (mac) DO UPDATE SET
+    cred_slot = EXCLUDED.cred_slot,
     device_id = EXCLUDED.device_id, ip = EXCLUDED.ip, role = EXCLUDED.role, name = EXCLUDED.name,
     platform = EXCLUDED.platform, firmware = EXCLUDED.firmware, ssid = EXCLUDED.ssid,
     ap_mac = EXCLUDED.ap_mac, signal = EXCLUDED.signal, netmode = EXCLUDED.netmode,
@@ -105,6 +107,12 @@ def save_result(conn: psycopg.Connection, scan_id: int, r: dict) -> None:
     for lease in r.get("leases", []):
         conn.execute(_INSERT_LEASE, {**lease, "cpe_mac": r["mac"], "scan_id": scan_id})
     conn.commit()
+
+
+def cred_slots_by_ip(conn: psycopg.Connection) -> dict[str, int]:
+    """IP -> credencial que funciono la ultima vez, para probarla primero."""
+    rows = conn.execute("SELECT host(ip), cred_slot FROM devices WHERE cred_slot IS NOT NULL AND ip IS NOT NULL")
+    return dict(rows.fetchall())
 
 
 def list_devices(conn: psycopg.Connection, role: str | None, search: str | None) -> list[tuple]:
