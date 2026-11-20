@@ -1,0 +1,2 @@
+# paramiko 4+ elimino ssh-rsa/ssh-dss, que es lo unico que ofrece el dropbear de los CPE airOS
+paramiko>=3.5,<4
