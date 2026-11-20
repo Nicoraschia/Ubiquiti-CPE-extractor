@@ -50,6 +50,8 @@ def process_one(conn: psycopg.Connection, creds: list[Credential] | None, worker
 
 def run(workers: int) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    # paramiko loguea cada login en INFO: con cientos de equipos tapa el log del worker.
+    logging.getLogger("paramiko").setLevel(logging.WARNING)
     # 0 desactiva el programado: solo se procesan escaneos pedidos por API o CLI.
     interval_s = int(os.environ.get("SCAN_INTERVAL_MIN", "60")) * 60
     try:
