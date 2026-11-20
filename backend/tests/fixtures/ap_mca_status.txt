@@ -1,0 +1,10 @@
+deviceName=AP_TEST_OE,deviceId=24:5A:4C:0C:85:33,firmwareVersion=XC.qca955x.v8.7.12.47627.240228.1548,platform=Rocket 5AC Lite,deviceIp=192.168.15.205
+
+apMac=24:5A:4C:0C:85:33
+wlanOpmode=ap-ptmp-mixed
+wlanConnections=7
+essid=AP-TEST
+freq=5490
+signal=-56
+noise=-90
+uptime=9586593
