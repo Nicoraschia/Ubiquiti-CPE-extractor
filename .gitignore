@@ -1,0 +1,5 @@
+# Salida generada por los scripts (contiene datos de clientes)
+*.csv
+
+# Entornos virtuales de Python
+venv/
