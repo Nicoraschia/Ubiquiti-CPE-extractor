@@ -1,10 +1,17 @@
 """Persistencia en Postgres. Una conexion, usada solo desde el hilo principal."""
 
+import ipaddress
 import os
 from importlib.resources import files
 
 import psycopg
+from psycopg.rows import tuple_row
 from psycopg.types.json import Jsonb
+
+
+def _tuples(conn: psycopg.Connection) -> psycopg.Cursor:
+    # Estas funciones leen filas por posicion; la API usa conexiones con dict_row.
+    return conn.cursor(row_factory=tuple_row)
 
 
 def connect() -> psycopg.Connection:
@@ -17,7 +24,9 @@ def init_schema(conn: psycopg.Connection) -> None:
 
 
 def add_subnet(conn: psycopg.Connection, cidr: str, name: str | None) -> int:
-    row = conn.execute(
+    # Postgres rechaza bits de host en un cidr (192.168.15.77/24): se normaliza a la red.
+    cidr = str(ipaddress.ip_network(cidr, strict=False))
+    row = _tuples(conn).execute(
         """INSERT INTO subnets (cidr, name) VALUES (%s, %s)
            ON CONFLICT (cidr) DO UPDATE SET name = COALESCE(EXCLUDED.name, subnets.name)
            RETURNING id""",
@@ -31,32 +40,83 @@ def list_subnets(conn: psycopg.Connection, only_enabled: bool = False) -> list[t
     sql = "SELECT id, cidr::text, name, enabled FROM subnets"
     if only_enabled:
         sql += " WHERE enabled"
-    return conn.execute(sql + " ORDER BY cidr").fetchall()
+    return _tuples(conn).execute(sql + " ORDER BY cidr").fetchall()
 
 
-def start_scan(conn: psycopg.Connection, subnet_id: int | None) -> int:
-    scan_id = conn.execute("INSERT INTO scans (subnet_id) VALUES (%s) RETURNING id", (subnet_id,)).fetchone()[0]
+_ACTIVE = "ON CONFLICT (subnet_id) WHERE status IN ('pending', 'running') DO NOTHING"
+
+
+def start_scan(conn: psycopg.Connection, subnet_id: int | None, trigger: str = "cli") -> int | None:
+    """Escaneo que arranca ya (CLI). None si esa subnet ya tiene uno pendiente o corriendo."""
+    row = _tuples(conn).execute(
+        f"INSERT INTO scans (subnet_id, status, trigger) VALUES (%s, 'running', %s) {_ACTIVE} RETURNING id",
+        (subnet_id, trigger),
+    ).fetchone()
     conn.commit()
-    return scan_id
+    return row[0] if row else None
 
 
-def finish_scan(conn: psycopg.Connection, scan_id: int, alive: int, ok: int, failed: int) -> None:
+def enqueue_scan(conn: psycopg.Connection, subnet_id: int, trigger: str) -> int | None:
+    """Encola para el worker. None si esa subnet ya tiene uno pendiente o corriendo."""
+    row = _tuples(conn).execute(
+        f"INSERT INTO scans (subnet_id, status, trigger) VALUES (%s, 'pending', %s) {_ACTIVE} RETURNING id",
+        (subnet_id, trigger),
+    ).fetchone()
+    conn.commit()
+    return row[0] if row else None
+
+
+def claim_scan(conn: psycopg.Connection) -> tuple[int, int, str, str | None] | None:
+    """Toma el escaneo pendiente mas viejo. SKIP LOCKED permite varios workers sin pisarse."""
+    row = _tuples(conn).execute(
+        """UPDATE scans s SET status = 'running', started_at = now()
+           FROM subnets n
+           WHERE n.id = s.subnet_id AND s.id = (
+               SELECT id FROM scans WHERE status = 'pending' ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1)
+           RETURNING s.id, s.subnet_id, n.cidr::text, n.name"""
+    ).fetchone()
+    conn.commit()
+    return row
+
+
+def finish_scan(
+    conn: psycopg.Connection, scan_id: int, alive: int | None, ok: int | None, failed: int | None,
+    status: str = "done", error: str | None = None,
+) -> None:
     conn.execute(
-        "UPDATE scans SET finished_at = now(), hosts_alive = %s, hosts_ok = %s, hosts_failed = %s WHERE id = %s",
-        (alive, ok, failed, scan_id),
+        """UPDATE scans SET finished_at = now(), hosts_alive = %s, hosts_ok = %s, hosts_failed = %s,
+                            status = %s, error = %s
+           WHERE id = %s""",
+        (alive, ok, failed, status, error, scan_id),
     )
     conn.commit()
+
+
+def fail_stale_scans(conn: psycopg.Connection) -> int:
+    """Al arrancar el worker: lo que quedo 'running' murio con el proceso anterior.
+
+    Los del CLI pueden estar corriendo en otro contenedor; solo se liberan si llevan
+    mas de una hora (un /24 tarda segundos), para que no bloqueen la subnet para siempre.
+    """
+    n = conn.execute(
+        """UPDATE scans SET status = 'failed', finished_at = now(), error = 'proceso interrumpido durante el escaneo'
+           WHERE status = 'running'
+             AND (trigger IS DISTINCT FROM 'cli' OR started_at < now() - interval '1 hour')"""
+    ).rowcount
+    conn.commit()
+    return n
 
 
 # Un equipo escaneado por SSH es la fuente de verdad: pisa todos los campos.
 _UPSERT_SSH = """
 INSERT INTO devices (mac, device_id, ip, role, name, platform, firmware, ssid, ap_mac, signal,
-                     netmode, shaper_in, shaper_out, config, cred_slot, source, last_seen, last_scan_id)
+                     netmode, shaper_in, shaper_out, config, cred_slot, source, last_seen, last_scan_id,
+                     ssh_scan_id)
 VALUES (%(mac)s, %(device_id)s, %(ip)s, %(role)s, %(name)s, %(platform)s, %(firmware)s, %(ssid)s,
         %(ap_mac)s, %(signal)s, %(netmode)s, %(shaper_in)s, %(shaper_out)s, %(config)s, %(cred_slot)s,
-        'ssh', now(), %(scan_id)s)
+        'ssh', now(), %(scan_id)s, %(scan_id)s)
 ON CONFLICT (mac) DO UPDATE SET
-    cred_slot = EXCLUDED.cred_slot,
+    cred_slot = EXCLUDED.cred_slot, ssh_scan_id = EXCLUDED.ssh_scan_id,
     device_id = EXCLUDED.device_id, ip = EXCLUDED.ip, role = EXCLUDED.role, name = EXCLUDED.name,
     platform = EXCLUDED.platform, firmware = EXCLUDED.firmware, ssid = EXCLUDED.ssid,
     ap_mac = EXCLUDED.ap_mac, signal = EXCLUDED.signal, netmode = EXCLUDED.netmode,
@@ -111,7 +171,7 @@ def save_result(conn: psycopg.Connection, scan_id: int, r: dict) -> None:
 
 def cred_slots_by_ip(conn: psycopg.Connection) -> dict[str, int]:
     """IP -> credencial que funciono la ultima vez, para probarla primero."""
-    rows = conn.execute("SELECT host(ip), cred_slot FROM devices WHERE cred_slot IS NOT NULL AND ip IS NOT NULL")
+    rows = _tuples(conn).execute("SELECT host(ip), cred_slot FROM devices WHERE cred_slot IS NOT NULL AND ip IS NOT NULL")
     return dict(rows.fetchall())
 
 
@@ -124,4 +184,4 @@ def list_devices(conn: psycopg.Connection, role: str | None, search: str | None)
           AND (%(q)s::text IS NULL OR concat_ws(' ', d.name, d.platform, d.mac::text, host(d.ip), d.ssid) ILIKE %(q)s)
         ORDER BY ap.name NULLS FIRST, d.name
     """
-    return conn.execute(sql, {"role": role, "q": f"%{search}%" if search else None}).fetchall()
+    return _tuples(conn).execute(sql, {"role": role, "q": f"%{search}%" if search else None}).fetchall()

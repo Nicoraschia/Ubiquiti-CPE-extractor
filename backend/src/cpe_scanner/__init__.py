@@ -1,35 +1,13 @@
 import argparse
-import getpass
 import json
-import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
-
-from .collector import collect
-
-
-def _credentials() -> list[tuple[str, str]]:
-    """SCAN_USER/SCAN_PASSWORD es la 1; SCAN_USER_2/SCAN_PASSWORD_2, la 2; y asi."""
-    creds = []
-    for suffix in ["", *(f"_{n}" for n in range(2, 10))]:
-        user, password = os.environ.get(f"SCAN_USER{suffix}"), os.environ.get(f"SCAN_PASSWORD{suffix}")
-        if user and password:
-            creds.append((user, password))
-    if not creds:
-        creds.append((input("Usuario: "), getpass.getpass("Contraseña: ")))
-    return creds
-
-
-def _collect_all(hosts: list[str], workers: int, preferred: dict[str, int] | None = None):
-    creds = _credentials()
-    preferred = preferred or {}
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        yield from pool.map(lambda h: collect(h, creds, preferred.get(h)), hosts)
 
 
 def cmd_probe(args) -> None:
-    for result in _collect_all(args.hosts, args.workers):
+    from .scanner import collect_all, credentials
+
+    for result in collect_all(args.hosts, credentials(interactive=True), args.workers):
         print(json.dumps(result, ensure_ascii=False))
 
 
@@ -56,31 +34,45 @@ def cmd_subnet_list(args) -> None:
             print(f"{sid:>4}  {cidr:<18}  {'on ' if enabled else 'off'}  {name or ''}")
 
 
+def _print_result(r: dict) -> None:
+    if r["ok"] and r.get("mac"):
+        extra = len(r.get("stations", r.get("leases", [])))
+        print(f"  ok   {r['host']:<16} {r['role']:<7} {r['name'] or ''} ({extra})", flush=True)
+    else:
+        print(f"  fail {r['host']:<16} {r.get('error', 'sin MAC')}", flush=True)
+
+
 def cmd_scan(args) -> None:
     from . import db
-    from .discovery import discover
+    from .scanner import credentials, run_scan
 
     with db.connect() as conn:
         subnets = [s for s in db.list_subnets(conn, only_enabled=True) if args.subnet in (None, s[1])]
         if not subnets:
             sys.exit("No hay subnets para escanear. Agregalas con: cpe-scanner subnet add <cidr>")
+        creds = credentials(interactive=True)
         for sid, cidr, name, _ in subnets:
-            t0 = time.monotonic()
             scan_id = db.start_scan(conn, sid)
-            alive = discover(cidr)
-            print(f"[scan {scan_id}] {cidr} ({name or '-'}): {len(alive)} hosts con SSH", flush=True)
-            ok = failed = 0
-            for r in _collect_all(alive, args.workers, db.cred_slots_by_ip(conn)):
-                db.save_result(conn, scan_id, r)
-                if r["ok"] and r.get("mac"):
-                    ok += 1
-                    extra = len(r.get("stations", r.get("leases", [])))
-                    print(f"  ok   {r['host']:<16} {r['role']:<7} {r['name'] or ''} ({extra})", flush=True)
-                else:
-                    failed += 1
-                    print(f"  fail {r['host']:<16} {r.get('error', 'sin MAC')}", flush=True)
-            db.finish_scan(conn, scan_id, len(alive), ok, failed)
-            print(f"[scan {scan_id}] ok={ok} fail={failed} en {time.monotonic() - t0:.1f}s")
+            if scan_id is None:
+                print(f"{cidr}: ya hay un escaneo pendiente o en curso, se saltea.")
+                continue
+            t0 = time.monotonic()
+            print(f"[scan {scan_id}] {cidr} ({name or '-'})", flush=True)
+            try:
+                alive, ok, failed = run_scan(conn, scan_id, cidr, creds, args.workers, _print_result)
+            except BaseException as e:
+                # Incluye Ctrl+C: el scan no puede quedar 'running' bloqueando la subnet.
+                conn.rollback()
+                db.finish_scan(conn, scan_id, None, None, None, status="failed", error=repr(e))
+                raise
+            db.finish_scan(conn, scan_id, alive, ok, failed)
+            print(f"[scan {scan_id}] {alive} hosts con SSH, ok={ok} fail={failed} en {time.monotonic() - t0:.1f}s")
+
+
+def cmd_worker(args) -> None:
+    from .worker import run
+
+    run(args.workers)
 
 
 def cmd_devices(args) -> None:
@@ -116,6 +108,8 @@ def main() -> None:
     s = sub.add_parser("scan", help="discovery + recoleccion de las subnets habilitadas")
     s.add_argument("--subnet", help="solo esta subnet (CIDR exacto)")
     s.set_defaults(func=cmd_scan)
+
+    sub.add_parser("worker", help="procesa la cola de escaneos y los programa").set_defaults(func=cmd_worker)
 
     s = sub.add_parser("devices", help="lista equipos guardados")
     s.add_argument("--role", choices=["ap", "cpe", "unknown"])

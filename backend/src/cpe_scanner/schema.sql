@@ -81,3 +81,23 @@ CREATE TABLE IF NOT EXISTS scan_errors (
     host     inet NOT NULL,
     error    text NOT NULL
 );
+
+-- Fase 2: la tabla scans es tambien la cola de trabajos del worker.
+-- status: pending -> running -> done | failed. trigger: cli | manual | schedule.
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'done';
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS trigger text;
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS error text;
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS requested_at timestamptz NOT NULL DEFAULT now();
+-- Un solo escaneo activo por subnet: encolar dos veces la misma no duplica trabajo.
+CREATE UNIQUE INDEX IF NOT EXISTS scans_one_active_per_subnet
+    ON scans (subnet_id) WHERE status IN ('pending', 'running');
+
+-- Escaneo SSH del que salen los leases vigentes del CPE. No sirve last_scan_id:
+-- ese avanza tambien cuando solo lo vimos desde el AP, sin leer sus leases.
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS ssh_scan_id int REFERENCES scans(id) ON DELETE SET NULL;
+UPDATE devices SET ssh_scan_id = last_scan_id WHERE ssh_scan_id IS NULL AND source = 'ssh';
+
+CREATE OR REPLACE VIEW current_leases AS
+SELECT l.*
+FROM lan_leases l
+JOIN devices d ON d.mac = l.cpe_mac AND l.scan_id = d.ssh_scan_id;
