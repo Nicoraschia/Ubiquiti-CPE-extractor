@@ -35,6 +35,16 @@ def test_requires_token(client):
     assert client.get("/health").status_code == 200
 
 
+def test_docs_expose_bearer_scheme_for_authorize_button(client):
+    spec = client.get("/openapi.json").json()
+    assert spec["components"]["securitySchemes"]["HTTPBearer"] == {
+        "type": "http", "scheme": "bearer", "description": "Token de API_TOKEN en el .env del servidor"
+    }
+    # El token no aparece como parametro suelto (Swagger no lo mandaria).
+    params = spec["paths"]["/api/aps"]["get"].get("parameters", [])
+    assert all(p["name"].lower() != "authorization" for p in params)
+
+
 def test_list_devices_and_filters(client):
     def macs(**params):
         r = client.get("/api/devices", params=params, headers=AUTH)

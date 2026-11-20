@@ -10,7 +10,8 @@ from collections.abc import Iterator
 from typing import Annotated, Literal
 
 import psycopg
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg.rows import dict_row
 from pydantic import BaseModel, field_validator
 
@@ -25,11 +26,16 @@ def get_conn() -> Iterator[psycopg.Connection]:
         yield conn
 
 
-def require_token(authorization: Annotated[str | None, Header()] = None) -> None:
+# Esquema de seguridad declarado: /docs muestra el boton Authorize y manda el header.
+# (Swagger UI ignora un parametro de header llamado Authorization.)
+bearer = HTTPBearer(auto_error=False, description="Token de API_TOKEN en el .env del servidor")
+
+
+def require_token(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> None:
     token = os.environ.get("API_TOKEN")
     if not token:
         raise HTTPException(503, "API_TOKEN no configurado en el servidor")
-    if not authorization or not secrets.compare_digest(authorization.encode(), f"Bearer {token}".encode()):
+    if creds is None or not secrets.compare_digest(creds.credentials.encode(), token.encode()):
         raise HTTPException(401, "token invalido", headers={"WWW-Authenticate": "Bearer"})
 
 
