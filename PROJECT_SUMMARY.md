@@ -17,6 +17,7 @@
 - Lab: `docker-lab` (root@192.168.64.5), todo dentro de `/root/ubiquiti_extractor`, todo en Docker. Deploy: el servidor es un clone de `v2`; `git pull --ff-only` via contenedor `alpine/git:2.54.1` + `docker compose build scanner` + `init-db`. Solo se despliega lo commiteado y pusheado. Discovery de 192.168.15.0/24: 92 hosts con SSH en 3 s.
 - Clave de equipo = MAC de `ath0` (`/sys/class/net/ath0/address`), para unir wstalist del AP con el escaneo SSH del CPE.
 - Fase 2 hecha y desplegada en lab (2026-11-20): cola de escaneos en tabla `scans` (sin Redis), worker con programado cada SCAN_INTERVAL_MIN (60) + escaneos manuales; API FastAPI con token Bearer en 127.0.0.1:8000: `/api/devices` (filtros q, role, ap, platform, lan, source, signal_max, sort, paginado), `/api/devices/{mac}` (leases, stations, historial), `/api/aps`, `/api/leases`, `/api/subnets`, `/api/scans`. 41 tests OK en lab. Validado: scan programado y manual por API 92/92, dedupe de pedidos, 17 CPE con router HG8245W5.
+- Fabricante por OUI hecho (2026-11-20): tabla `oui_vendors` (IEEE MA-L, 40.5k), refresco semanal en el worker, columna `vendor` en `current_leases` junto al hostname, filtros `lan`/`q` buscan por fabricante, `/api/leases/vendors`. Real: 80/80 leases con fabricante; los 19 hostname-hash son todos "Huawei Device Co., Ltd.". 48 tests OK.
 - Tests de Postgres sin commitear: imagen temporal con `tar --format ustar | ssh docker build -` (no escribe en el checkout del servidor).
 - Hallazgo: `wstalist` del AP trae nombre, modelo, firmware, IP y senal de cada CPE -> escaneo de AP frecuente, CPE solo para leases/shaper.
 - Plan v2: interfaz web con discovery por subnet, filtros por cualquier campo, vista AP -> CPE, monitoreo en vivo por CPE.
@@ -24,7 +25,7 @@
 
 ## Proximo
 - Credenciales multiples: SCAN_USER[_N]/SCAN_PASSWORD[_N] en .env, se prueban en orden, `devices.cred_slot` recuerda cual funciono. Validado 2026-11-20 (scan 2): 92/92 ok en 10.6 s (79 clave 1, 13 clave 2), 80 leases, 0 duplicados.
-- Fase 2b: fabricante por OUI en leases (21/69 son hash).
+- Opcional: normalizar fabricante a marca (Huawei Technologies/Huawei Device -> Huawei; TP-LINK/TP-Link Systems/Mercury/Mercusys -> TP-Link) para filtros mas simples.
 - Fase 3: UI (tabla filtrable, vista por AP, detalle de CPE).
 - Fase 4: vivo por CPE + eventos de desconexion.
 
