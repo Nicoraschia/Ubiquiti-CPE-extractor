@@ -42,7 +42,7 @@ for host in hosts:
     conexion_exitosa = True
 
     try:
-        cliente_ssh.connect(hostname=host, username=usuario, password=contraseña)
+        cliente_ssh.connect(hostname=host, username=usuario, password=contraseña, timeout=10)
 
         # Leer el archivo system.cfg remoto
         _, stdout, _ = cliente_ssh.exec_command(f'cat {ruta_remota}')
@@ -83,7 +83,8 @@ for host in hosts:
 
         print(f'Los valores del host {host} se han guardado en el archivo CSV.')
 
-    except paramiko.SSHException as e:
+    # OSError cubre TimeoutError, socket.timeout y NoValidConnectionsError (host caido o puerto cerrado)
+    except (paramiko.SSHException, OSError) as e:
         print(f'Error al conectar con el host {host}: {e}')
         conexion_exitosa = False
 
