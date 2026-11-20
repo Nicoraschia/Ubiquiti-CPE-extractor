@@ -12,19 +12,23 @@
 ## En curso (rama `v2`)
 - Fase 0 hecha en `backend/`: parsers (system.cfg, mca-status, wstalist, dhcpd.leases) con 9 tests, collector SSH por rol, CLI `cpe-scanner` (JSON por linea, concurrente). Probado en vivo 2026-11-20 contra un AP (7 stations) y un CPE (leases OK).
 - Confirmado: en el CPE `apMac` (mca-status) es la MAC del AP al que esta asociado; difiere del `deviceId` propio.
+- Fase 1 validada 2026-11-20 en 192.168.15.0/24: 92 hosts, 10 AP + 69 CPE por SSH + 13 CPE solo via wstalist (fallo de auth), 69 leases, 9.7 s. 0 duplicados, 0 CPE con AP desconocido: la clave MAC ath0 une bien AP<->CPE.
+- Fase 1 implementada (sin commitear): Postgres + docker-compose, discovery por subnet (TCP 22), persistencia (devices, ap_links, lan_leases, scans, scan_errors), CLI `init-db | subnet add/list | scan | devices | probe`. 16 tests OK (4 de integracion contra Postgres en contenedor).
+- Lab: `docker-lab` (root@192.168.64.5), todo dentro de `/root/ubiquiti_extractor`, todo en Docker. Sync con `git ls-files -co --exclude-standard | tar | ssh`. Discovery de 192.168.15.0/24: 92 hosts con SSH en 3 s.
+- Clave de equipo = MAC de `ath0` (`/sys/class/net/ath0/address`), para unir wstalist del AP con el escaneo SSH del CPE.
 - Hallazgo: `wstalist` del AP trae nombre, modelo, firmware, IP y senal de cada CPE -> escaneo de AP frecuente, CPE solo para leases/shaper.
 - Plan v2: interfaz web con discovery por subnet, filtros por cualquier campo, vista AP -> CPE, monitoreo en vivo por CPE.
 - Stack decidido: FastAPI + worker Python (scanner paramiko) + Postgres + Next.js/shadcn. Docker en servidor de la red del ISP. Escala 500-3000 equipos.
 
 ## Proximo
-- Fase 1: discovery de subnets + Postgres.
+- Fase 2: credenciales multiples probadas en orden (13/92 equipos usan otra clave).
+- Fase 2/3: fabricante por OUI de la MAC (21/69 leases tienen hostname-hash en vez de modelo).
 - Fase 2: API + scheduler + jobs manuales.
 - Fase 3: UI (tabla filtrable, vista por AP, detalle de CPE).
 - Fase 4: vivo por CPE + eventos de desconexion.
 
 ## Bloqueos / pendientes
-- Fase 1: normalizar tipos (`signal` llega como string desde mca-status y como int desde wstalist).
-- Fase 1: verificar si el `deviceId` del CPE coincide con la MAC que muestra el `wstalist` del AP; si no, vincular por `lastip`.
+- Reloj de docker-lab atrasado (11 nov vs 20 nov): afecta timestamps de last_seen/scans.
 - macOS re-marca como `hidden` el `.pth` del venv de `backend/` y Python lo ignora: correr con `PYTHONPATH=src` (pytest ya lo tiene configurado).
 - Bug conocido v1: solo guarda el ultimo lease por CPE; columnas `modelo`/`hostname` estan corridas (en realidad son hostname DHCP / client-id).
 - `Cpe_leases/hosts.txt` modificado sin commitear (contiene IPs reales).
