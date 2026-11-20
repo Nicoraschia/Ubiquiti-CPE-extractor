@@ -1,5 +1,19 @@
 name: cpe-scanner
 
+# Imagen y entorno comunes a api, worker y scanner (CLI).
+x-app: &app
+  build: ./backend
+  image: cpe-scanner:local
+  environment: &app-env
+    DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    SCAN_USER: ${SCAN_USER:-}
+    SCAN_PASSWORD: ${SCAN_PASSWORD:-}
+    SCAN_USER_2: ${SCAN_USER_2:-}
+    SCAN_PASSWORD_2: ${SCAN_PASSWORD_2:-}
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
   db:
     image: postgres:16-alpine
@@ -17,20 +31,30 @@ services:
       timeout: 3s
       retries: 10
 
+  api:
+    <<: *app
+    restart: unless-stopped
+    entrypoint: ["uvicorn", "cpe_scanner.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *app-env
+      API_TOKEN: ${API_TOKEN:?definir API_TOKEN en .env}
+    # Solo en localhost del servidor; la web (Fase 3) la consume por la red interna.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  worker:
+    <<: *app
+    restart: unless-stopped
+    command: ["worker"]
+    environment:
+      <<: *app-env
+      SCAN_INTERVAL_MIN: ${SCAN_INTERVAL_MIN:-60}
+
   # Herramienta de linea de comandos: `docker compose run --rm scanner <comando>`.
   # El profile evita que `up -d` la arranque como servicio.
   scanner:
-    build: ./backend
+    <<: *app
     profiles: ["cli"]
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      SCAN_USER: ${SCAN_USER:-}
-      SCAN_PASSWORD: ${SCAN_PASSWORD:-}
-      SCAN_USER_2: ${SCAN_USER_2:-}
-      SCAN_PASSWORD_2: ${SCAN_PASSWORD_2:-}
-    depends_on:
-      db:
-        condition: service_healthy
 
 volumes:
   pgdata:
