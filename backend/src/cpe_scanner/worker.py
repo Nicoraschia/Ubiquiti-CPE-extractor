@@ -6,7 +6,7 @@ import time
 
 import psycopg
 
-from . import db
+from . import db, oui
 from .collector import Credential
 from .scanner import NoCredentials, credentials, run_scan
 
@@ -64,10 +64,12 @@ def run(workers: int) -> None:
         db.init_schema(conn)
         if stale := db.fail_stale_scans(conn):
             log.warning("%s escaneos colgados marcados como failed", stale)
+        oui.refresh_if_stale(conn)
         next_schedule = time.monotonic()  # el primero, al arrancar
         log.info("worker listo: intervalo=%s min, %s credenciales", interval_s // 60, len(creds or []))
         while True:
             if interval_s and time.monotonic() >= next_schedule:
+                oui.refresh_if_stale(conn)  # descarga solo si la lista tiene mas de 7 dias
                 schedule_all(conn)
                 next_schedule = time.monotonic() + interval_s
             if not process_one(conn, creds, workers):

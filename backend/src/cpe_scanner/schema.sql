@@ -97,7 +97,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS scans_one_active_per_subnet
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS ssh_scan_id int REFERENCES scans(id) ON DELETE SET NULL;
 UPDATE devices SET ssh_scan_id = last_scan_id WHERE ssh_scan_id IS NULL AND source = 'ssh';
 
+-- Fabricante por OUI (lista MA-L de IEEE), la carga `cpe-scanner oui update` o el worker.
+CREATE TABLE IF NOT EXISTS oui_vendors (
+    prefix      char(6) PRIMARY KEY,  -- 'AABBCC'
+    vendor      text NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- vendor se agrega al final: CREATE OR REPLACE VIEW solo permite sumar columnas al final.
 CREATE OR REPLACE VIEW current_leases AS
-SELECT l.*
+SELECT l.*,
+       -- Bit "localmente administrada": MAC aleatoria (privacidad de celulares), sin fabricante.
+       CASE WHEN (('x' || left(l.mac::text, 2))::bit(8)::int & 2) <> 0 THEN 'MAC privada (aleatoria)'
+            ELSE o.vendor END AS vendor
 FROM lan_leases l
-JOIN devices d ON d.mac = l.cpe_mac AND l.scan_id = d.ssh_scan_id;
+JOIN devices d ON d.mac = l.cpe_mac AND l.scan_id = d.ssh_scan_id
+LEFT JOIN oui_vendors o ON o.prefix = upper(replace(left(l.mac::text, 8), ':', ''));

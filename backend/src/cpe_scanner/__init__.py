@@ -69,6 +69,13 @@ def cmd_scan(args) -> None:
             print(f"[scan {scan_id}] {alive} hosts con SSH, ok={ok} fail={failed} en {time.monotonic() - t0:.1f}s")
 
 
+def cmd_oui_update(args) -> None:
+    from . import db, oui
+
+    with db.connect() as conn:
+        print(f"{oui.replace_vendors(conn, oui.download())} fabricantes cargados.")
+
+
 def cmd_worker(args) -> None:
     from .worker import run
 
@@ -108,6 +115,10 @@ def main() -> None:
     s = sub.add_parser("scan", help="discovery + recoleccion de las subnets habilitadas")
     s.add_argument("--subnet", help="solo esta subnet (CIDR exacto)")
     s.set_defaults(func=cmd_scan)
+
+    s = sub.add_parser("oui", help="lista de fabricantes por MAC (IEEE)")
+    osub = s.add_subparsers(dest="subcmd", required=True)
+    osub.add_parser("update", help="descarga y reemplaza la lista").set_defaults(func=cmd_oui_update)
 
     sub.add_parser("worker", help="procesa la cola de escaneos y los programa").set_defaults(func=cmd_worker)
 

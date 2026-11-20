@@ -101,6 +101,25 @@ def test_leases_search(client):
     assert [(r["hostname"], r["cpe_name"], r["ap_name"]) for r in rows] == [("HG8145V5", "CLIENTE_1_SSH", "AP_TEST")]
 
 
+def test_vendor_search_keeps_hostname(client, api_env):
+    from cpe_scanner import oui
+
+    oui.replace_vendors(api_env, [("48B25D", "HUAWEI TECHNOLOGIES CO.,LTD")])
+
+    rows = client.get("/api/leases", params={"q": "huawei"}, headers=AUTH).json()
+    assert [(r["hostname"], r["vendor"]) for r in rows] == [("HG8145V5", "HUAWEI TECHNOLOGIES CO.,LTD")]
+
+    devices = client.get("/api/devices", params={"lan": "huawei"}, headers=AUTH).json()["items"]
+    assert [(d["mac"], d["lan_hosts"], d["lan_vendors"]) for d in devices] == [
+        (f.CPE_MAC, ["HG8145V5"], ["HUAWEI TECHNOLOGIES CO.,LTD"])
+    ]
+    assert client.get("/api/leases/vendors", headers=AUTH).json() == [
+        {"vendor": "HUAWEI TECHNOLOGIES CO.,LTD", "leases": 1, "hostname_hash": 0}
+    ]
+    detail = client.get(f"/api/devices/{f.CPE_MAC}", headers=AUTH).json()
+    assert detail["leases"][0]["vendor"] == "HUAWEI TECHNOLOGIES CO.,LTD"
+
+
 def test_subnets_crud(client):
     r = client.post("/api/subnets", json={"cidr": "10.1.2.3/24", "name": "Nueva"}, headers=AUTH)
     assert r.status_code == 201 and r.json()["cidr"] == "10.1.2.0/24"

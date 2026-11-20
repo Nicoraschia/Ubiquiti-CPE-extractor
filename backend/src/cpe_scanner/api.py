@@ -115,7 +115,7 @@ WHERE (%(role)s::text IS NULL OR d.role = %(role)s)
                                          d.ssid, ap.name) ILIKE %(q)s)
   AND (%(lan)s::text IS NULL OR EXISTS (
         SELECT 1 FROM current_leases cl
-        WHERE cl.cpe_mac = d.mac AND concat_ws(' ', cl.hostname, cl.mac::text, host(cl.ip)) ILIKE %(lan)s))
+        WHERE cl.cpe_mac = d.mac AND concat_ws(' ', cl.hostname, cl.vendor, cl.mac::text, host(cl.ip)) ILIKE %(lan)s))
 """
 
 
@@ -133,7 +133,7 @@ def list_devices(
     role: Literal["ap", "cpe", "unknown"] | None = None,
     ap: Annotated[str | None, Query(pattern=MAC_RE, description="MAC del AP")] = None,
     platform: str | None = None,
-    lan: Annotated[str | None, Query(description="router LAN: hostname, MAC o IP del lease")] = None,
+    lan: Annotated[str | None, Query(description="router LAN: hostname, fabricante, MAC o IP del lease")] = None,
     source: Literal["ssh", "wstalist"] | None = None,
     signal_max: Annotated[int | None, Query(description="senal <= este valor (ej. -70)")] = None,
     sort: Literal["name", "signal", "ip", "platform", "last_seen", "ap"] = "name",
@@ -151,7 +151,9 @@ def list_devices(
                    d.signal, d.netmode, d.shaper_in, d.shaper_out, d.source, d.last_seen,
                    d.ap_mac::text AS ap_mac, ap.name AS ap_name,
                    (SELECT array_agg(DISTINCT coalesce(cl.hostname, cl.mac::text))
-                      FROM current_leases cl WHERE cl.cpe_mac = d.mac) AS lan_hosts
+                      FROM current_leases cl WHERE cl.cpe_mac = d.mac) AS lan_hosts,
+                   (SELECT array_agg(DISTINCT cl.vendor) FILTER (WHERE cl.vendor IS NOT NULL)
+                      FROM current_leases cl WHERE cl.cpe_mac = d.mac) AS lan_vendors
             {_DEVICE_FILTERS}
             ORDER BY {_SORTS[sort]} {order} NULLS LAST, d.mac
             LIMIT %(limit)s OFFSET %(offset)s""",
@@ -173,7 +175,7 @@ def get_device(mac: Annotated[str, Path(pattern=MAC_RE)], conn: Conn) -> dict:
     if device is None:
         raise HTTPException(404, "equipo inexistente")
     device["leases"] = conn.execute(
-        """SELECT mac::text AS mac, host(ip) AS ip, hostname, client_id, lease_time, seen_at
+        """SELECT mac::text AS mac, host(ip) AS ip, hostname, vendor, client_id, lease_time, seen_at
            FROM current_leases WHERE cpe_mac = %s::macaddr ORDER BY ip""",
         (mac,),
     ).fetchall()
@@ -204,19 +206,29 @@ def list_aps(conn: Conn) -> list[dict]:
     ).fetchall()
 
 
+@api.get("/leases/vendors")
+def lease_vendors(conn: Conn) -> list[dict]:
+    """Cuantos routers LAN hay de cada fabricante (para facetas de filtro)."""
+    return conn.execute(
+        """SELECT coalesce(vendor, '(desconocido)') AS vendor, count(*) AS leases,
+                  count(*) FILTER (WHERE hostname ~ '^[0-9a-f]{20,}$') AS hostname_hash
+           FROM current_leases GROUP BY 1 ORDER BY 2 DESC, 1"""
+    ).fetchall()
+
+
 @api.get("/leases")
 def list_leases(
     conn: Conn,
-    q: Annotated[str | None, Query(description="hostname, MAC o IP del router LAN")] = None,
+    q: Annotated[str | None, Query(description="hostname, fabricante, MAC o IP del router LAN")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> list[dict]:
     return conn.execute(
-        """SELECT cl.hostname, cl.mac::text AS mac, host(cl.ip) AS ip, cl.client_id,
+        """SELECT cl.hostname, cl.vendor, cl.mac::text AS mac, host(cl.ip) AS ip, cl.client_id,
                   d.mac::text AS cpe_mac, d.name AS cpe_name, host(d.ip) AS cpe_ip, ap.name AS ap_name
            FROM current_leases cl
            JOIN devices d ON d.mac = cl.cpe_mac
            LEFT JOIN devices ap ON ap.mac = d.ap_mac
-           WHERE %(q)s::text IS NULL OR concat_ws(' ', cl.hostname, cl.mac::text, host(cl.ip)) ILIKE %(q)s
+           WHERE %(q)s::text IS NULL OR concat_ws(' ', cl.hostname, cl.vendor, cl.mac::text, host(cl.ip)) ILIKE %(q)s
            ORDER BY cl.hostname NULLS LAST, d.name
            LIMIT %(limit)s""",
         {"q": _like(q), "limit": limit},
