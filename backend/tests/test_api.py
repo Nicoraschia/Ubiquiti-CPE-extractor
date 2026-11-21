@@ -101,6 +101,30 @@ def test_leases_search(client):
     assert [(r["hostname"], r["cpe_name"], r["ap_name"]) for r in rows] == [("HG8145V5", "CLIENTE_1_SSH", "AP_TEST")]
 
 
+def test_multi_word_search_requires_all_terms(client, api_env):
+    from cpe_scanner import oui
+
+    oui.replace_vendors(api_env, [("48B25D", "HUAWEI TECHNOLOGIES CO.,LTD")])
+
+    def leases(q):
+        return [r["hostname"] for r in client.get("/api/leases", params={"q": q}, headers=AUTH).json()]
+
+    assert leases("HUAWEI TECHNOLOGIES 192.168.9.") == ["HG8145V5"]  # fabricante + IP LAN
+    assert leases("huawei 192.168.15.115") == ["HG8145V5"]  # fabricante + IP del CPE
+    assert leases("huawei AP_TEST") == ["HG8145V5"]  # fabricante + AP
+    assert leases("huawei 192.168.18.") == []  # una palabra no esta: no matchea
+    assert leases("   ") == ["HG8145V5"]  # vacio = sin filtro
+
+    def devices(**params):
+        r = client.get("/api/devices", params=params, headers=AUTH).json()
+        return sorted(d["mac"] for d in r["items"])
+
+    assert devices(q="litebeam lejano") == [OTHER_CPE]
+    assert devices(q="litebeam CLIENTE_1") == []
+    assert devices(lan="huawei 192.168.9.101") == [f.CPE_MAC]
+    assert devices(lan="huawei 192.168.9.7") == []
+
+
 def test_vendor_search_keeps_hostname(client, api_env):
     from cpe_scanner import oui
 

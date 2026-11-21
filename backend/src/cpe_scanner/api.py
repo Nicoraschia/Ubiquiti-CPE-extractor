@@ -99,26 +99,6 @@ def update_subnet(subnet_id: int, body: SubnetPatch, conn: Conn) -> dict:
 
 # ---------- devices ----------
 
-_SORTS = {
-    "name": "d.name", "signal": "d.signal", "ip": "d.ip", "platform": "d.platform",
-    "last_seen": "d.last_seen", "ap": "ap.name",
-}
-
-_DEVICE_FILTERS = """
-FROM devices d LEFT JOIN devices ap ON ap.mac = d.ap_mac
-WHERE (%(role)s::text IS NULL OR d.role = %(role)s)
-  AND (%(ap)s::macaddr IS NULL OR d.ap_mac = %(ap)s::macaddr)
-  AND (%(platform)s::text IS NULL OR d.platform ILIKE %(platform)s)
-  AND (%(source)s::text IS NULL OR d.source = %(source)s)
-  AND (%(signal_max)s::int IS NULL OR d.signal <= %(signal_max)s)
-  AND (%(q)s::text IS NULL OR concat_ws(' ', d.name, d.platform, d.firmware, d.mac::text, host(d.ip),
-                                         d.ssid, ap.name) ILIKE %(q)s)
-  AND (%(lan)s::text IS NULL OR EXISTS (
-        SELECT 1 FROM current_leases cl
-        WHERE cl.cpe_mac = d.mac AND concat_ws(' ', cl.hostname, cl.vendor, cl.mac::text, host(cl.ip)) ILIKE %(lan)s))
-"""
-
-
 def _like(v: str | None) -> str | None:
     # '_' y '%' son comodines de LIKE: "AP_TEST" no debe matchear "AP-TEST".
     if not v:
@@ -126,14 +106,46 @@ def _like(v: str | None) -> str | None:
     return "%" + v.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 
+def _terms(v: str | None) -> list[str] | None:
+    """Busqueda por palabras: "huawei 192.168.18." exige que esten TODAS (en cualquier campo)."""
+    terms = [_like(t) for t in (v or "").split()]
+    return terms or None
+
+
+def _all_match(haystack: str, param: str) -> str:
+    # Ningun termino sin matchear = todos matchean. NULL = sin filtro.
+    return (f"(%({param})s::text[] IS NULL OR NOT EXISTS ("
+            f"SELECT 1 FROM unnest(%({param})s::text[]) t WHERE NOT ({haystack} ILIKE t)))")
+
+
+_SORTS = {
+    "name": "d.name", "signal": "d.signal", "ip": "d.ip", "platform": "d.platform",
+    "last_seen": "d.last_seen", "ap": "ap.name",
+}
+
+_DEVICE_FILTERS = f"""
+FROM devices d LEFT JOIN devices ap ON ap.mac = d.ap_mac
+WHERE (%(role)s::text IS NULL OR d.role = %(role)s)
+  AND (%(ap)s::macaddr IS NULL OR d.ap_mac = %(ap)s::macaddr)
+  AND (%(platform)s::text IS NULL OR d.platform ILIKE %(platform)s)
+  AND (%(source)s::text IS NULL OR d.source = %(source)s)
+  AND (%(signal_max)s::int IS NULL OR d.signal <= %(signal_max)s)
+  AND {_all_match("concat_ws(' ', d.name, d.platform, d.firmware, d.mac::text, host(d.ip), d.ssid, ap.name)", "q")}
+  AND (%(lan)s::text[] IS NULL OR EXISTS (
+        SELECT 1 FROM current_leases cl
+        WHERE cl.cpe_mac = d.mac
+          AND {_all_match("concat_ws(' ', cl.hostname, cl.vendor, cl.mac::text, host(cl.ip))", "lan")}))
+"""
+
+
 @api.get("/devices")
 def list_devices(
     conn: Conn,
-    q: Annotated[str | None, Query(description="nombre, modelo, firmware, MAC, IP, SSID o AP")] = None,
+    q: Annotated[str | None, Query(description="palabras (todas deben estar): nombre, modelo, firmware, MAC, IP, SSID o AP")] = None,
     role: Literal["ap", "cpe", "unknown"] | None = None,
     ap: Annotated[str | None, Query(pattern=MAC_RE, description="MAC del AP")] = None,
     platform: str | None = None,
-    lan: Annotated[str | None, Query(description="router LAN: hostname, fabricante, MAC o IP del lease")] = None,
+    lan: Annotated[str | None, Query(description="router LAN, palabras (todas en el mismo lease): hostname, fabricante, MAC o IP")] = None,
     source: Literal["ssh", "wstalist"] | None = None,
     signal_max: Annotated[int | None, Query(description="senal <= este valor (ej. -70)")] = None,
     sort: Literal["name", "signal", "ip", "platform", "last_seen", "ap"] = "name",
@@ -142,7 +154,7 @@ def list_devices(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict:
     params = {
-        "q": _like(q), "role": role, "ap": ap, "platform": _like(platform), "lan": _like(lan),
+        "q": _terms(q), "role": role, "ap": ap, "platform": _like(platform), "lan": _terms(lan),
         "source": source, "signal_max": signal_max, "limit": limit, "offset": offset,
     }
     total = conn.execute(f"SELECT count(*) AS n {_DEVICE_FILTERS}", params).fetchone()["n"]
@@ -219,19 +231,23 @@ def lease_vendors(conn: Conn) -> list[dict]:
 @api.get("/leases")
 def list_leases(
     conn: Conn,
-    q: Annotated[str | None, Query(description="hostname, fabricante, MAC o IP del router LAN")] = None,
+    q: Annotated[str | None, Query(
+        description="palabras (todas deben estar): hostname, fabricante, MAC o IP del router; nombre o IP del CPE; AP"
+    )] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> list[dict]:
+    haystack = ("concat_ws(' ', cl.hostname, cl.vendor, cl.mac::text, host(cl.ip), "
+                "d.name, host(d.ip), ap.name)")
     return conn.execute(
-        """SELECT cl.hostname, cl.vendor, cl.mac::text AS mac, host(cl.ip) AS ip, cl.client_id,
-                  d.mac::text AS cpe_mac, d.name AS cpe_name, host(d.ip) AS cpe_ip, ap.name AS ap_name
-           FROM current_leases cl
-           JOIN devices d ON d.mac = cl.cpe_mac
-           LEFT JOIN devices ap ON ap.mac = d.ap_mac
-           WHERE %(q)s::text IS NULL OR concat_ws(' ', cl.hostname, cl.vendor, cl.mac::text, host(cl.ip)) ILIKE %(q)s
-           ORDER BY cl.hostname NULLS LAST, d.name
-           LIMIT %(limit)s""",
-        {"q": _like(q), "limit": limit},
+        f"""SELECT cl.hostname, cl.vendor, cl.mac::text AS mac, host(cl.ip) AS ip, cl.client_id,
+                   d.mac::text AS cpe_mac, d.name AS cpe_name, host(d.ip) AS cpe_ip, ap.name AS ap_name
+            FROM current_leases cl
+            JOIN devices d ON d.mac = cl.cpe_mac
+            LEFT JOIN devices ap ON ap.mac = d.ap_mac
+            WHERE {_all_match(haystack, "q")}
+            ORDER BY cl.hostname NULLS LAST, d.name
+            LIMIT %(limit)s""",
+        {"q": _terms(q), "limit": limit},
     ).fetchall()
 
 
