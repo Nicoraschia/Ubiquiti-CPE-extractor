@@ -1,0 +1,30 @@
+{
+	# Sin API de administracion: nadie puede reconfigurar Caddy desde la red.
+	admin off
+}
+
+# SITE_ADDRESS: nombre o IP con el que entran los tecnicos (ej. https://cpe.isp.local o https://192.168.64.5).
+# `tls internal` usa la CA propia de Caddy; instalar su raiz en los equipos de soporte para no ver la advertencia.
+# Con certificado propio: reemplazar por `tls /certs/cert.pem /certs/key.pem` y montar /certs.
+{$SITE_ADDRESS} {
+	tls internal
+
+	encode zstd gzip
+
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Solo la web. La API, Postgres y el worker no son alcanzables desde aca.
+	reverse_proxy web:3000
+
+	log {
+		output stdout
+		format console
+	}
+}

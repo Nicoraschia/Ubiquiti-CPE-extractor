@@ -20,4 +20,8 @@ COPY src ./src
 COPY tests ./tests
 RUN uv sync --frozen
 
+# Sin root: el codigo y el venv quedan de root, solo lectura para el proceso.
+RUN useradd --system --uid 10001 --no-create-home app
+USER app
+
 ENTRYPOINT ["cpe-scanner"]
