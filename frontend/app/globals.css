@@ -1,0 +1,448 @@
+@import "tailwindcss";
+
+/* Tokens de DESIGN.md. light-dark() sigue la preferencia del sistema; el diseno parte del oscuro. */
+:root {
+  color-scheme: light dark;
+
+  --bg: light-dark(#f6f7f8, #0c0e10);
+  --surface: light-dark(#ffffff, #13161a);
+  --raised: light-dark(#eef0f2, #1a1e23);
+  --border: light-dark(#d9dde1, #262b31);
+  --border-strong: light-dark(#c3c9cf, #343a42);
+  --text: light-dark(#14171a, #e6e8ea);
+  --muted: light-dark(#5d6670, #8a9199);
+  --faint: light-dark(#8a929b, #5b626b);
+  --ok: light-dark(#1f8a55, #3fb97a);
+  --warn: light-dark(#a86e00, #e5a50a);
+  --crit: light-dark(#c93432, #f0524f);
+  --nodata: light-dark(#8a929b, #5b626b);
+  --accent: light-dark(#0b7fa3, #5ac8e6);
+
+  accent-color: var(--accent);
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-crit: var(--crit);
+  --color-nodata: var(--nodata);
+  --color-accent: var(--accent);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, sans-serif;
+  --font-cond: var(--font-plex-cond), var(--font-plex-sans), sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+
+.label-caps {
+  font: 600 11.5px/1 var(--font-cond);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- botones ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--raised);
+  color: var(--text);
+  font: 500 13px/1 var(--font-sans);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease-out,
+    background 0.12s ease-out,
+    opacity 0.12s ease-out;
+}
+.btn:hover {
+  border-color: var(--faint);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+.btn-primary {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+.btn-primary:hover {
+  opacity: 0.9;
+  border-color: var(--text);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.btn-ghost:hover {
+  color: var(--text);
+  background: var(--raised);
+  border-color: transparent;
+}
+.btn-danger {
+  background: transparent;
+  color: var(--crit);
+  border-color: color-mix(in srgb, var(--crit) 45%, transparent);
+}
+.btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+/* ---------- campos ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field > label {
+  font: 500 12px var(--font-sans);
+  color: var(--muted);
+}
+.input,
+.select {
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 10px;
+  font: 13px var(--font-sans);
+  min-width: 0;
+}
+.input::placeholder {
+  color: var(--faint);
+}
+.input:user-invalid,
+.input[aria-invalid="true"] {
+  border-color: var(--crit);
+}
+.field-error {
+  display: none;
+  font-size: 12px;
+  color: var(--crit);
+}
+.input:user-invalid ~ .field-error,
+.field-error[data-shown="true"] {
+  display: block;
+}
+
+/* ---------- chips de filtro ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.chip b {
+  font-weight: 500;
+  color: var(--text);
+}
+.chip[data-on="true"] {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* ---------- tablas ---------- */
+.table-wrap {
+  overflow: auto;
+  max-inline-size: 100%;
+}
+.data {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.data thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 30px;
+  padding: 0 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+  font: 600 11.5px/1 var(--font-cond);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.data thead th:has(> a) {
+  padding: 0;
+}
+.data thead th > a {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.data thead th > a:hover,
+.data thead th[aria-sort] {
+  color: var(--text);
+}
+.data th[aria-sort="ascending"] > a::after {
+  content: "\2191";
+}
+.data th[aria-sort="descending"] > a::after {
+  content: "\2193";
+}
+.data tbody td,
+.data tbody th {
+  height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-weight: 400;
+}
+.data tbody tr {
+  transition: background 0.12s ease-out;
+}
+.data tbody tr:hover {
+  background: var(--raised);
+}
+.data tbody tr[data-level="crit"] > :first-child {
+  box-shadow: inset 2px 0 0 var(--crit);
+}
+.data a.row-link {
+  color: inherit;
+  text-decoration: none;
+}
+.data a.row-link:hover {
+  color: var(--accent);
+}
+.link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- medidor de senal: barras (forma) + color (estado) + numero ---------- */
+.sig {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.sig .bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.sig .bars i {
+  width: 3px;
+  border-radius: 1px;
+  background: var(--border-strong);
+}
+.sig .bars i:nth-child(1) {
+  height: 4px;
+}
+.sig .bars i:nth-child(2) {
+  height: 7px;
+}
+.sig .bars i:nth-child(3) {
+  height: 10px;
+}
+.sig .bars i:nth-child(4) {
+  height: 14px;
+}
+.sig[data-level="ok"] i[data-lit] {
+  background: var(--ok);
+}
+.sig[data-level="warn"] i[data-lit] {
+  background: var(--warn);
+}
+.sig[data-level="crit"] i[data-lit] {
+  background: var(--crit);
+}
+.sig .v {
+  min-width: 30px;
+  text-align: right;
+  font: 500 12.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.sig[data-level="warn"] .v {
+  color: var(--warn);
+}
+.sig[data-level="crit"] .v {
+  color: var(--crit);
+}
+.sig[data-level="none"] .v {
+  color: var(--nodata);
+}
+
+/* ---------- estados ---------- */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 12px var(--font-mono);
+}
+.status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status[data-state="running"],
+.status[data-state="pending"] {
+  color: var(--accent);
+}
+.status[data-state="running"] .dot {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.status[data-state="done"],
+.status[data-state="ok"] {
+  color: var(--ok);
+}
+.status[data-state="failed"],
+.status[data-state="off"] {
+  color: var(--crit);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+.alert[data-tone="crit"] {
+  border-color: color-mix(in srgb, var(--crit) 40%, transparent);
+  background: color-mix(in srgb, var(--crit) 11%, transparent);
+}
+.alert[data-tone="warn"] {
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  background: color-mix(in srgb, var(--warn) 11%, transparent);
+}
+.alert[data-tone="ok"] {
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: color-mix(in srgb, var(--ok) 11%, transparent);
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+kbd {
+  font: 500 11px/1 var(--font-mono);
+  padding: 3px 5px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: var(--surface);
+}
+
+/* ---------- dialogos nativos ---------- */
+dialog {
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+}
+dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
