@@ -97,7 +97,7 @@ export function CommandPalette() {
       <button
         type="button"
         onClick={open}
-        className="flex h-8 w-full max-w-[520px] items-center gap-2 rounded-md border border-border bg-bg px-2.5 text-left text-faint transition-colors duration-150 hover:border-border-strong"
+        className="flex h-8 w-full min-w-0 max-w-[520px] items-center gap-2 rounded-md border border-border bg-bg px-2.5 text-left text-faint transition-colors duration-150 hover:border-border-strong"
         aria-keyshortcuts="/ Control+K Meta+K"
       >
         <IconSearch />

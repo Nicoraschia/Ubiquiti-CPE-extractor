@@ -33,7 +33,7 @@ export function Sparkline({
     <svg
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
-      className="block h-[72px] w-full"
+      className="block h-full min-h-[96px] w-full"
       role="img"
       aria-label={`Senal entre ${min} y ${max} dBm en ${points.length} escaneos; actual ${last.dbm} dBm`}
     >

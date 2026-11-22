@@ -194,14 +194,19 @@ export default async function DevicePage({
         </section>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-          <section className="panel p-4" aria-labelledby="sig-title">
+          <section
+            className="panel flex flex-col p-4"
+            aria-labelledby="sig-title"
+          >
             <div className="mb-2 flex items-baseline justify-between">
               <h2 id="sig-title" className="label-caps">
                 Senal, ultimos {points.length} escaneos
               </h2>
               <SignalMeter dbm={d.signal} />
             </div>
-            <Sparkline points={points} />
+            <div className="min-h-[96px] flex-1">
+              <Sparkline points={points} />
+            </div>
             {apChanges ? (
               <p className="mt-3 text-[13px] text-warn">
                 Cambio de AP {apChanges} {apChanges === 1 ? "vez" : "veces"} en
