@@ -1,12 +1,16 @@
 {
 	# Sin API de administracion: nadie puede reconfigurar Caddy desde la red.
 	admin off
+	# El contenedor no toca el trust store del sistema; la raiz se exporta a mano.
+	skip_install_trust
+	# Entrando por IP el navegador no manda SNI: sin esto el handshake TLS falla.
+	default_sni {$SITE_HOST}
 }
 
-# SITE_ADDRESS: nombre o IP con el que entran los tecnicos (ej. https://cpe.isp.local o https://192.168.64.5).
+# SITE_HOST: nombre o IP con el que entran los tecnicos (ej. cpe.isp.local o 192.168.64.5).
 # `tls internal` usa la CA propia de Caddy; instalar su raiz en los equipos de soporte para no ver la advertencia.
 # Con certificado propio: reemplazar por `tls /certs/cert.pem /certs/key.pem` y montar /certs.
-{$SITE_ADDRESS} {
+https://{$SITE_HOST} {
 	tls internal
 
 	encode zstd gzip

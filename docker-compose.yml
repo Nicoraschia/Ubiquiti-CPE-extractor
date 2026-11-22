@@ -74,7 +74,7 @@ services:
     image: caddy:2.11.9-alpine
     restart: unless-stopped
     environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:?definir SITE_ADDRESS en .env (ej. https://192.168.64.5)}
+      SITE_HOST: ${SITE_HOST:?definir SITE_HOST en .env (ej. 192.168.64.5)}
     ports:
       - "80:80"
       - "443:443"
