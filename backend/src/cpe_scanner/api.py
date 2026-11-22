@@ -263,6 +263,7 @@ def list_leases(
         description="palabras (todas deben estar): hostname, fabricante, MAC o IP del router; nombre o IP del CPE; AP"
     )] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[dict]:
     haystack = ("concat_ws(' ', cl.hostname, cl.vendor, cl.mac::text, host(cl.ip), "
                 "d.name, host(d.ip), ap.name)")
@@ -273,9 +274,9 @@ def list_leases(
             JOIN devices d ON d.mac = cl.cpe_mac
             LEFT JOIN devices ap ON ap.mac = d.ap_mac
             WHERE {_all_match(haystack, "q")}
-            ORDER BY cl.hostname NULLS LAST, d.name
-            LIMIT %(limit)s""",
-        {"q": _terms(q), "limit": limit},
+            ORDER BY cl.hostname NULLS LAST, d.name, cl.mac
+            LIMIT %(limit)s OFFSET %(offset)s""",
+        {"q": _terms(q), "limit": limit, "offset": offset},
     ).fetchall()
 
 

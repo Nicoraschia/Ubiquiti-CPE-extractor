@@ -125,6 +125,20 @@ def test_multi_word_search_requires_all_terms(client, api_env):
     assert devices(lan="huawei 192.168.9.7") == []
 
 
+def test_leases_pagination(client, api_env):
+    scan = db.start_scan(api_env, None)
+    leases = [dict(lease_time=i, mac=f"48:b2:5d:00:00:{i:02x}", ip=f"192.168.9.{i}", hostname=f"R{i:02d}",
+                   client_id=None) for i in range(1, 6)]
+    db.save_result(api_env, scan, f.cpe(leases=leases))
+
+    def page(**params):
+        return [r["hostname"] for r in client.get("/api/leases", params=params, headers=AUTH).json()]
+
+    assert page(limit=2) == ["R01", "R02"]
+    assert page(limit=2, offset=2) == ["R03", "R04"]
+    assert page(limit=2, offset=4) == ["R05"]
+
+
 def test_vendor_search_keeps_hostname(client, api_env):
     from cpe_scanner import oui
 

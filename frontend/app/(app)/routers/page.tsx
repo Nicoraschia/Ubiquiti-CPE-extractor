@@ -1,20 +1,27 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Empty, PageHead, TableRegion } from "@/components/ui";
+import { Empty, hrefWith, PageHead, TableRegion } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { brand, int } from "@/lib/format";
-import { one } from "@/lib/params";
+import { intParam, one } from "@/lib/params";
 import type { LeaseRow, VendorCount } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Routers LAN" };
 
+const LIMIT = 200;
+
 export default async function RoutersPage({
   searchParams,
 }: PageProps<"/routers">) {
-  const q = one(await searchParams, "q");
-  const [rows, vendors] = await Promise.all([
-    apiFetch<LeaseRow[]>("/api/leases", { query: { q, limit: 500 } }),
+  const sp = await searchParams;
+  const q = one(sp, "q");
+  const offset = intParam(sp, "offset", 0, 1_000_000) ?? 0;
+  const [page, vendors] = await Promise.all([
+    // Uno de mas: si vuelve, hay pagina siguiente (la API no cuenta el total de leases).
+    apiFetch<LeaseRow[]>("/api/leases", {
+      query: { q, limit: LIMIT + 1, offset },
+    }),
     apiFetch<VendorCount[]>("/api/leases/vendors"),
   ]);
   // Facetas por marca: suma los fabricantes IEEE que son la misma marca (Huawei Technologies + Huawei Device).
@@ -27,12 +34,19 @@ export default async function RoutersPage({
     brands.set(b, (brands.get(b) ?? 0) + v.leases);
   }
   const facets = [...brands].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const hasNext = page.length > LIMIT;
+  const rows = page.slice(0, LIMIT);
+  const params = { q };
 
   return (
     <>
       <PageHead
         title="Routers LAN"
-        count={`${int(rows.length)}${rows.length === 500 ? "+" : ""} dispositivos`}
+        count={
+          rows.length
+            ? `${int(offset + 1)}-${int(offset + rows.length)}${hasNext ? " de mas" : ` de ${int(offset + rows.length)}`}`
+            : undefined
+        }
       />
       <form
         method="get"
@@ -122,7 +136,38 @@ export default async function RoutersPage({
             </tbody>
           </table>
         </TableRegion>
-      ) : (
+      ) : null}
+      {rows.length && (offset > 0 || hasNext) ? (
+        <nav
+          aria-label="Paginas"
+          className="mt-3 flex items-center justify-end gap-2 text-[13px] text-muted"
+        >
+          <span className="num">
+            {offset + 1}-{offset + rows.length}
+          </span>
+          {offset > 0 ? (
+            <Link
+              className="btn btn-sm"
+              href={hrefWith("/routers", params, {
+                offset: offset > LIMIT ? String(offset - LIMIT) : undefined,
+              })}
+            >
+              Anterior
+            </Link>
+          ) : null}
+          {hasNext ? (
+            <Link
+              className="btn btn-sm"
+              href={hrefWith("/routers", params, {
+                offset: String(offset + LIMIT),
+              })}
+            >
+              Siguiente
+            </Link>
+          ) : null}
+        </nav>
+      ) : null}
+      {rows.length ? null : (
         <div className="panel">
           <Empty>
             {q
