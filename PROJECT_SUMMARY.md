@@ -1,7 +1,7 @@
 # Ubiquiti CPE Extractor
 
-**Estado:** activo (planificacion de v2 web)
-**Ultima actualizacion:** 2026-11-20
+**Estado:** activo (backend v2 listo en lab; falta UI)
+**Ultima actualizacion:** 2026-11-22
 
 ## Hecho
 - Scripts CLI: `Cpe_leases/ssh_lista_leases.py` (system.cfg + dhcpd.leases) y `Stations on the AP/` (wstalist).
@@ -18,18 +18,20 @@
 - Clave de equipo = MAC de `ath0` (`/sys/class/net/ath0/address`), para unir wstalist del AP con el escaneo SSH del CPE.
 - Fase 2 hecha y desplegada en lab (2026-11-20): cola de escaneos en tabla `scans` (sin Redis), worker con programado cada SCAN_INTERVAL_MIN (60) + escaneos manuales; API FastAPI con token Bearer en 127.0.0.1:8000: `/api/devices` (filtros q, role, ap, platform, lan, source, signal_max, sort, paginado), `/api/devices/{mac}` (leases, stations, historial), `/api/aps`, `/api/leases`, `/api/subnets`, `/api/scans`. 41 tests OK en lab. Validado: scan programado y manual por API 92/92, dedupe de pedidos, 17 CPE con router HG8245W5.
 - Fabricante por OUI hecho (2026-11-20): tabla `oui_vendors` (IEEE MA-L, 40.5k), refresco semanal en el worker, columna `vendor` en `current_leases` junto al hostname, filtros `lan`/`q` buscan por fabricante, `/api/leases/vendors`. Real: 80/80 leases con fabricante; los 19 hostname-hash son todos "Huawei Device Co., Ltd.". 48 tests OK.
+- Credenciales multiples: SCAN_USER[_N]/SCAN_PASSWORD[_N] en .env, se prueban en orden, `devices.cred_slot` recuerda cual funciono. Validado 2026-11-20 (scan 2): 92/92 ok en 10.6 s (79 clave 1, 13 clave 2), 80 leases, 0 duplicados.
+- Busqueda multi-palabra (2026-11-22): `q` y `lan` separan por espacios y exigen que cada palabra matchee algun campo (ej. `huawei 192.168.18.`). `/api/leases` busca tambien en IP/nombre del CPE y del AP. 49 tests OK, desplegado.
 - Tests de Postgres sin commitear: imagen temporal con `tar --format ustar | ssh docker build -` (no escribe en el checkout del servidor).
 - Hallazgo: `wstalist` del AP trae nombre, modelo, firmware, IP y senal de cada CPE -> escaneo de AP frecuente, CPE solo para leases/shaper.
 - Plan v2: interfaz web con discovery por subnet, filtros por cualquier campo, vista AP -> CPE, monitoreo en vivo por CPE.
 - Stack decidido: FastAPI + worker Python (scanner paramiko) + Postgres + Next.js/shadcn. Docker en servidor de la red del ISP. Escala 500-3000 equipos.
 
 ## Proximo
-- Credenciales multiples: SCAN_USER[_N]/SCAN_PASSWORD[_N] en .env, se prueban en orden, `devices.cred_slot` recuerda cual funciono. Validado 2026-11-20 (scan 2): 92/92 ok en 10.6 s (79 clave 1, 13 clave 2), 80 leases, 0 duplicados.
 - Opcional: normalizar fabricante a marca (Huawei Technologies/Huawei Device -> Huawei; TP-LINK/TP-Link Systems/Mercury/Mercusys -> TP-Link) para filtros mas simples.
 - Fase 3: UI (tabla filtrable, vista por AP, detalle de CPE).
 - Fase 4: vivo por CPE + eventos de desconexion.
 
 ## Bloqueos / pendientes
+- 22 leases detras de CPE 192.168.18.x salen sin AP: sus AP no estan en ninguna subnet cargada.
 - macOS re-marca como `hidden` el `.pth` del venv de `backend/` y Python lo ignora: correr con `PYTHONPATH=src` (pytest ya lo tiene configurado).
 - Bug conocido v1: solo guarda el ultimo lease por CPE; columnas `modelo`/`hostname` estan corridas (en realidad son hostname DHCP / client-id).
 - `Cpe_leases/hosts.txt` modificado sin commitear (contiene IPs reales).
