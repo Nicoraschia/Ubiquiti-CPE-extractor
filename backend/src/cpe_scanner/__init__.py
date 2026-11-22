@@ -76,6 +76,54 @@ def cmd_oui_update(args) -> None:
         print(f"{oui.replace_vendors(conn, oui.download())} fabricantes cargados.")
 
 
+def _ask_password() -> str:
+    import getpass
+
+    pw = getpass.getpass("Clave nueva: ")
+    if pw != getpass.getpass("Repetir clave: "):
+        sys.exit("Las claves no coinciden.")
+    return pw
+
+
+def cmd_user_add(args) -> None:
+    from . import auth, db
+
+    with db.connect() as conn:
+        try:
+            uid = auth.create_user(conn, args.username, _ask_password(), args.role)
+        except ValueError as e:
+            sys.exit(str(e))
+        auth.audit(conn, None, "cli", "user_add", {"id": uid, "role": args.role}, None)
+    print(f"Usuario {args.username} ({args.role}) -> id {uid}")
+
+
+def cmd_user_passwd(args) -> None:
+    from . import auth, db
+
+    with db.connect() as conn:
+        row = conn.execute("SELECT id FROM users WHERE username = %s", (args.username.lower(),)).fetchone()
+        if row is None:
+            sys.exit(f"No existe el usuario {args.username}")
+        try:
+            auth.set_password(conn, row[0], _ask_password())
+        except ValueError as e:
+            sys.exit(str(e))
+        # Tambien reactiva: es la salida si un admin quedo desactivado.
+        conn.execute("UPDATE users SET enabled = true WHERE id = %s", (row[0],))
+        conn.commit()
+        auth.audit(conn, None, "cli", "user_update", {"id": row[0], "password_reset": True}, None)
+    print("Clave cambiada; sus sesiones abiertas se cerraron.")
+
+
+def cmd_user_list(args) -> None:
+    from . import db
+
+    with db.connect() as conn:
+        rows = conn.execute("SELECT username, role, enabled, last_login_at FROM users ORDER BY username").fetchall()
+    for username, role, enabled, last in rows:
+        print(f"{username:<24} {role:<7} {'on ' if enabled else 'off'}  ultimo login: {last or '-'}")
+
+
 def cmd_worker(args) -> None:
     from .worker import run
 
@@ -119,6 +167,17 @@ def main() -> None:
     s = sub.add_parser("oui", help="lista de fabricantes por MAC (IEEE)")
     osub = s.add_subparsers(dest="subcmd", required=True)
     osub.add_parser("update", help="descarga y reemplaza la lista").set_defaults(func=cmd_oui_update)
+
+    s = sub.add_parser("user", help="usuarios de la web")
+    usub = s.add_subparsers(dest="subcmd", required=True)
+    a = usub.add_parser("add", help="crea un usuario (pide la clave)")
+    a.add_argument("username")
+    a.add_argument("--role", choices=["admin", "viewer"], default="viewer")
+    a.set_defaults(func=cmd_user_add)
+    a = usub.add_parser("passwd", help="cambia la clave y reactiva el usuario")
+    a.add_argument("username")
+    a.set_defaults(func=cmd_user_passwd)
+    usub.add_parser("list").set_defaults(func=cmd_user_list)
 
     sub.add_parser("worker", help="procesa la cola de escaneos y los programa").set_defaults(func=cmd_worker)
 

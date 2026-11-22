@@ -1,6 +1,6 @@
-"""API HTTP de solo lectura sobre el inventario, mas alta de subnets y pedido de escaneos.
+"""API HTTP del inventario. La consume la web (BFF Next.js) con token de sesion y scripts con API_TOKEN.
 
-Todo bajo token Bearer (API_TOKEN): devuelve nombres de clientes.
+Lectura: cualquier usuario. Escritura (subnets, escaneos, usuarios): solo admin.
 """
 
 import ipaddress
@@ -10,12 +10,13 @@ from collections.abc import Iterator
 from typing import Annotated, Literal
 
 import psycopg
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg.rows import dict_row
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
-from . import db
+from . import auth, db
+from .auth import Principal
 
 MAC_RE = r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$"
 
@@ -28,20 +29,44 @@ def get_conn() -> Iterator[psycopg.Connection]:
 
 # Esquema de seguridad declarado: /docs muestra el boton Authorize y manda el header.
 # (Swagger UI ignora un parametro de header llamado Authorization.)
-bearer = HTTPBearer(auto_error=False, description="Token de API_TOKEN en el .env del servidor")
-
-
-def require_token(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> None:
-    token = os.environ.get("API_TOKEN")
-    if not token:
-        raise HTTPException(503, "API_TOKEN no configurado en el servidor")
-    if creds is None or not secrets.compare_digest(creds.credentials.encode(), token.encode()):
-        raise HTTPException(401, "token invalido", headers={"WWW-Authenticate": "Bearer"})
-
+bearer = HTTPBearer(auto_error=False, description="Token de sesion (login) o API_TOKEN del .env")
 
 Conn = Annotated[psycopg.Connection, Depends(get_conn)]
-app = FastAPI(title="CPE Scanner API", version="0.2.0")
-api = APIRouter(prefix="/api", dependencies=[Depends(require_token)])
+Creds = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
+
+
+def client_ip(request: Request) -> str | None:
+    # La API solo es alcanzable desde la red interna de docker y localhost: el BFF pasa la IP real.
+    ip = request.headers.get("x-client-ip") or (request.client.host if request.client else None)
+    try:
+        return str(ipaddress.ip_address(ip)) if ip else None
+    except ValueError:
+        return None
+
+
+def current_user(creds: Creds, conn: Conn) -> Principal:
+    if creds is not None:
+        api_token = os.environ.get("API_TOKEN")
+        if api_token and secrets.compare_digest(creds.credentials.encode(), api_token.encode()):
+            return Principal(None, "api-token", "admin")
+        if user := auth.session_principal(conn, creds.credentials):
+            return user
+    raise HTTPException(401, "sesion invalida o vencida", headers={"WWW-Authenticate": "Bearer"})
+
+
+User = Annotated[Principal, Depends(current_user)]
+
+
+def require_admin(user: User) -> Principal:
+    if not user.is_admin:
+        raise HTTPException(403, "requiere rol admin")
+    return user
+
+
+Admin = Annotated[Principal, Depends(require_admin)]
+
+app = FastAPI(title="CPE Scanner API", version="0.3.0")
+api = APIRouter(prefix="/api", dependencies=[Depends(current_user)])
 
 
 @app.get("/health")
@@ -79,13 +104,14 @@ def list_subnets(conn: Conn) -> list[dict]:
 
 
 @api.post("/subnets", status_code=201)
-def create_subnet(body: SubnetIn, conn: Conn) -> dict:
+def create_subnet(body: SubnetIn, conn: Conn, user: Admin, request: Request) -> dict:
     sid = db.add_subnet(conn, body.cidr, body.name)
+    auth.audit(conn, user, user.username, "subnet_add", {"cidr": body.cidr, "name": body.name}, client_ip(request))
     return conn.execute(f"SELECT {_SUBNET_COLS} FROM subnets WHERE id = %s", (sid,)).fetchone()
 
 
 @api.patch("/subnets/{subnet_id}")
-def update_subnet(subnet_id: int, body: SubnetPatch, conn: Conn) -> dict:
+def update_subnet(subnet_id: int, body: SubnetPatch, conn: Conn, user: Admin, request: Request) -> dict:
     row = conn.execute(
         f"""UPDATE subnets SET name = COALESCE(%s, name), enabled = COALESCE(%s, enabled)
             WHERE id = %s RETURNING {_SUBNET_COLS}""",
@@ -94,6 +120,8 @@ def update_subnet(subnet_id: int, body: SubnetPatch, conn: Conn) -> dict:
     if row is None:
         raise HTTPException(404, "subnet inexistente")
     conn.commit()
+    auth.audit(conn, user, user.username, "subnet_update",
+               {"id": subnet_id, **body.model_dump(exclude_none=True)}, client_ip(request))
     return row
 
 
@@ -283,7 +311,7 @@ def get_scan(scan_id: int, conn: Conn) -> dict:
 
 
 @api.post("/scans", status_code=202)
-def request_scan(body: ScanRequest, conn: Conn) -> dict:
+def request_scan(body: ScanRequest, conn: Conn, user: Admin, request: Request) -> dict:
     """Encola un escaneo de una subnet (o de todas las habilitadas). Lo ejecuta el worker."""
     if body.subnet_id is None:
         subnet_ids = [r["id"] for r in conn.execute("SELECT id FROM subnets WHERE enabled ORDER BY id")]
@@ -298,7 +326,142 @@ def request_scan(body: ScanRequest, conn: Conn) -> dict:
             already_active.append(sid)
         else:
             queued.append(scan_id)
+    auth.audit(conn, user, user.username, "scan_request", {"subnet_id": body.subnet_id, "queued": queued},
+               client_ip(request))
     return {"queued": queued, "already_active": already_active}
 
 
+# ---------- auth ----------
+
+class LoginIn(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=auth.PASSWORD_MAX)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(max_length=auth.PASSWORD_MAX)
+    new_password: str = Field(max_length=auth.PASSWORD_MAX)
+
+
+def _me(user: Principal) -> dict:
+    return {"id": user.id, "username": user.username, "role": user.role}
+
+
+public = APIRouter(prefix="/api/auth")
+
+
+@public.post("/login")
+def login(body: LoginIn, conn: Conn, request: Request) -> dict:
+    """Devuelve un token de sesion opaco. El BFF lo guarda en una cookie httpOnly; el navegador nunca lo ve."""
+    try:
+        result = auth.login(conn, body.username, body.password, client_ip(request),
+                            request.headers.get("user-agent"))
+    except auth.LoginThrottled:
+        raise HTTPException(429, "demasiados intentos fallidos, espera 15 minutos") from None
+    if result is None:
+        raise HTTPException(401, "usuario o clave incorrectos")
+    token, user = result
+    return {"token": token, "user": _me(user)}
+
+
+@api.get("/auth/me")
+def me(user: User) -> dict:
+    return _me(user)
+
+
+@api.post("/auth/logout", status_code=204)
+def logout(creds: Creds, conn: Conn, user: User, request: Request) -> None:
+    auth.logout(conn, creds.credentials)
+    auth.audit(conn, user, user.username, "logout", None, client_ip(request))
+
+
+@api.post("/auth/password", status_code=204)
+def change_password(body: PasswordChange, creds: Creds, conn: Conn, user: User, request: Request) -> None:
+    if user.id is None:
+        raise HTTPException(400, "API_TOKEN no tiene clave: se cambia en el .env")
+    if not auth.verify_password(conn, user.id, body.current_password):
+        raise HTTPException(400, "la clave actual no es correcta")
+    try:
+        auth.set_password(conn, user.id, body.new_password, keep_session=creds.credentials)
+    except auth.PasswordPolicyError as e:
+        raise HTTPException(422, str(e)) from None
+    auth.audit(conn, user, user.username, "password_change", None, client_ip(request))
+
+
+# ---------- usuarios (admin) ----------
+
+class UserIn(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=auth.PASSWORD_MAX)
+    role: Literal["admin", "viewer"] = "viewer"
+
+
+class UserPatch(BaseModel):
+    role: Literal["admin", "viewer"] | None = None
+    enabled: bool | None = None
+    password: str | None = Field(default=None, max_length=auth.PASSWORD_MAX)
+
+
+_USER_COLS = """u.id, u.username, u.role, u.enabled, u.created_at, u.last_login_at, u.password_changed_at,
+                (SELECT count(*) FROM sessions s WHERE s.user_id = u.id) AS sessions"""
+
+
+def _get_user(conn: psycopg.Connection, user_id: int) -> dict:
+    row = conn.execute(f"SELECT {_USER_COLS} FROM users u WHERE u.id = %s", (user_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "usuario inexistente")
+    return row
+
+
+@api.get("/users", dependencies=[Depends(require_admin)])
+def list_users(conn: Conn) -> list[dict]:
+    return conn.execute(f"SELECT {_USER_COLS} FROM users u ORDER BY u.username").fetchall()
+
+
+@api.post("/users", status_code=201)
+def create_user(body: UserIn, conn: Conn, user: Admin, request: Request) -> dict:
+    try:
+        uid = auth.create_user(conn, body.username, body.password, body.role)
+    except psycopg.errors.UniqueViolation:
+        conn.rollback()
+        raise HTTPException(409, "ese usuario ya existe") from None
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    auth.audit(conn, user, user.username, "user_add", {"id": uid, "role": body.role}, client_ip(request))
+    return _get_user(conn, uid)
+
+
+@api.patch("/users/{user_id}")
+def update_user(user_id: int, body: UserPatch, conn: Conn, user: Admin, request: Request) -> dict:
+    _get_user(conn, user_id)
+    # Un admin no puede quitarse el acceso a si mismo: siempre queda al menos uno.
+    if user_id == user.id and (body.enabled is False or body.role == "viewer"):
+        raise HTTPException(400, "no podes desactivarte ni quitarte el rol admin a vos mismo")
+    if body.password is not None:
+        try:
+            auth.set_password(conn, user_id, body.password)
+        except auth.PasswordPolicyError as e:
+            raise HTTPException(422, str(e)) from None
+    conn.execute(
+        "UPDATE users SET role = COALESCE(%s, role), enabled = COALESCE(%s, enabled) WHERE id = %s",
+        (body.role, body.enabled, user_id),
+    )
+    conn.commit()
+    if body.enabled is False or body.role is not None:
+        auth.revoke_sessions(conn, user_id)  # el cambio de permisos rige ya, no al vencer la sesion
+    changes = body.model_dump(exclude_none=True, exclude={"password"})
+    if body.password is not None:
+        changes["password_reset"] = True
+    auth.audit(conn, user, user.username, "user_update", {"id": user_id, **changes}, client_ip(request))
+    return _get_user(conn, user_id)
+
+
+@api.get("/audit", dependencies=[Depends(require_admin)])
+def audit_log(conn: Conn, limit: Annotated[int, Query(ge=1, le=500)] = 100) -> list[dict]:
+    return conn.execute(
+        "SELECT id, at, actor, action, detail, host(ip) AS ip FROM audit_log ORDER BY id DESC LIMIT %s", (limit,)
+    ).fetchall()
+
+
+app.include_router(public)
 app.include_router(api)

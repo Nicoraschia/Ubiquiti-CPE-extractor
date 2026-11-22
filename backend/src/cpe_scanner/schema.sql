@@ -113,3 +113,46 @@ SELECT l.*,
 FROM lan_leases l
 JOIN devices d ON d.mac = l.cpe_mac AND l.scan_id = d.ssh_scan_id
 LEFT JOIN oui_vendors o ON o.prefix = upper(replace(left(l.mac::text, 8), ':', ''));
+
+-- ---------- Fase 3: usuarios de la web ----------
+CREATE TABLE IF NOT EXISTS users (
+    id                  serial PRIMARY KEY,
+    username            text NOT NULL UNIQUE CHECK (username ~ '^[a-z0-9._-]{3,32}$'),
+    password_hash       text NOT NULL,  -- Argon2id
+    role                text NOT NULL CHECK (role IN ('admin', 'viewer')),
+    enabled             boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    password_changed_at timestamptz NOT NULL DEFAULT now(),
+    last_login_at       timestamptz
+);
+
+-- Se guarda el SHA-256 del token, no el token: un dump de la base no sirve para entrar.
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash   bytea PRIMARY KEY,
+    user_id      int NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    last_seen_at timestamptz NOT NULL DEFAULT now(),
+    ip           inet,
+    user_agent   text
+);
+CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id);
+
+-- Intentos fallidos recientes, para frenar fuerza bruta por usuario y por IP.
+CREATE TABLE IF NOT EXISTS login_failures (
+    id       bigserial PRIMARY KEY,
+    at       timestamptz NOT NULL DEFAULT now(),
+    username text,
+    ip       inet
+);
+CREATE INDEX IF NOT EXISTS login_failures_at ON login_failures (at);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id      bigserial PRIMARY KEY,
+    at      timestamptz NOT NULL DEFAULT now(),
+    user_id int REFERENCES users(id) ON DELETE SET NULL,
+    actor   text NOT NULL,
+    action  text NOT NULL,
+    detail  jsonb,
+    ip      inet
+);
+CREATE INDEX IF NOT EXISTS audit_log_at ON audit_log (at DESC);
