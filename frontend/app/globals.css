@@ -208,7 +208,7 @@
     .table-wrap {
       overflow: clip;
     }
-    .data thead th {
+    .table-wrap .data thead th {
       top: 52px;
     }
   }
