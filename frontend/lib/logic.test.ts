@@ -20,6 +20,16 @@ test("safeNext solo acepta rutas internas", () => {
     assert.equal(safeNext(evil), "/equipos", String(evil));
   }
   assert.equal(safeNext("/login?next=/x"), "/equipos"); // sin bucles de login
+  // El parser de URL del navegador borra TAB/CR/LF: "/\t/evil" termina siendo "//evil".
+  for (const evil of [
+    "/\t/evil.com",
+    "/\n/evil.com",
+    "/\r/evil.com",
+    "/\t\\evil.com",
+  ]) {
+    assert.equal(safeNext(evil), "/equipos", JSON.stringify(evil));
+  }
+  assert.equal(safeNext("/equipos?q=a%09b"), "/equipos?q=a%09b"); // codificado en la query es valido
 });
 
 test("umbrales de senal airOS", () => {
