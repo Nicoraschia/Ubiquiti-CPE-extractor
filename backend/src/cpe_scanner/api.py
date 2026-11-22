@@ -456,6 +456,18 @@ def update_user(user_id: int, body: UserPatch, conn: Conn, user: Admin, request:
     return _get_user(conn, user_id)
 
 
+@api.delete("/hostkeys/{ip}", status_code=204)
+def forget_host_key(ip: str, conn: Conn, user: Admin, request: Request) -> None:
+    """Acepta un equipo reemplazado: el proximo escaneo registra su host key nueva."""
+    try:
+        ip = str(ipaddress.ip_address(ip))
+    except ValueError:
+        raise HTTPException(422, "IP invalida") from None
+    if not db.forget_host_key(conn, ip):
+        raise HTTPException(404, "no hay host key registrada para esa IP")
+    auth.audit(conn, user, user.username, "hostkey_forget", {"ip": ip}, client_ip(request))
+
+
 @api.get("/audit", dependencies=[Depends(require_admin)])
 def audit_log(conn: Conn, limit: Annotated[int, Query(ge=1, le=500)] = 100) -> list[dict]:
     return conn.execute(

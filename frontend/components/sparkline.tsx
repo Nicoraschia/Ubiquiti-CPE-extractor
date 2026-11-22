@@ -1,4 +1,4 @@
-import { SIGNAL_CRIT, SIGNAL_OK, signalLevel } from "@/lib/signal";
+import { SIGNAL_CRIT, SIGNAL_OK } from "@/lib/signal";
 
 const W = 400;
 const H = 72;
@@ -66,12 +66,6 @@ export function Sparkline({
         points={points
           .map((p) => `${x(p.at).toFixed(1)},${y(p.dbm).toFixed(1)}`)
           .join(" ")}
-      />
-      <circle
-        cx={W}
-        cy={y(last.dbm)}
-        r="3"
-        fill={`var(--${signalLevel(last.dbm) === "none" ? "nodata" : signalLevel(last.dbm)})`}
       />
     </svg>
   );

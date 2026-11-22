@@ -124,6 +124,16 @@ def cmd_user_list(args) -> None:
         print(f"{username:<24} {role:<7} {'on ' if enabled else 'off'}  ultimo login: {last or '-'}")
 
 
+def cmd_hostkey_forget(args) -> None:
+    from . import auth, db
+
+    with db.connect() as conn:
+        if not db.forget_host_key(conn, args.ip):
+            sys.exit(f"No hay host key registrada para {args.ip}")
+        auth.audit(conn, None, "cli", "hostkey_forget", {"ip": args.ip}, None)
+    print(f"Host key de {args.ip} olvidada: el proximo escaneo registra la nueva.")
+
+
 def cmd_worker(args) -> None:
     from .worker import run
 
@@ -178,6 +188,12 @@ def main() -> None:
     a.add_argument("username")
     a.set_defaults(func=cmd_user_passwd)
     usub.add_parser("list").set_defaults(func=cmd_user_list)
+
+    s = sub.add_parser("hostkey", help="host keys SSH registradas (trust on first use)")
+    hsub = s.add_subparsers(dest="subcmd", required=True)
+    a = hsub.add_parser("forget", help="acepta un equipo reemplazado en esa IP")
+    a.add_argument("ip")
+    a.set_defaults(func=cmd_hostkey_forget)
 
     sub.add_parser("worker", help="procesa la cola de escaneos y los programa").set_defaults(func=cmd_worker)
 

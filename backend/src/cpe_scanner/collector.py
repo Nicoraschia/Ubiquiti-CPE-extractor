@@ -1,5 +1,6 @@
 """Conexion SSH a un equipo airOS y recoleccion segun su rol."""
 
+import base64
 from dataclasses import asdict
 
 import paramiko
@@ -43,13 +44,40 @@ def _mac(value: str | None) -> str | None:
 
 
 Credential = tuple[str, str]
+HostKey = tuple[str, str]  # (tipo, base64), p. ej. ("ssh-rsa", "AAAAB3...")
+
+HOST_KEY_CHANGED = (
+    "host key distinta a la registrada: no se enviaron credenciales. Posible suplantacion o "
+    "equipo reemplazado; si es legitimo, olvidar la clave registrada de esta IP"
+)
 
 
-def _connect(host: str, creds: list[Credential], first: int | None, timeout: float) -> tuple[paramiko.SSHClient, int]:
+def _pkey(keytype: str, b64: str) -> paramiko.PKey:
+    return paramiko.PKey.from_type_string(keytype, base64.b64decode(b64))
+
+
+def _server_key(ssh: paramiko.SSHClient) -> HostKey:
+    key = ssh.get_transport().get_remote_server_key()
+    return key.get_name(), key.get_base64()
+
+
+class _TrustOnFirstUse(paramiko.MissingHostKeyPolicy):
+    """Equipo nunca visto: se acepta y el escaneo guarda su clave. Desde ahi queda fijada."""
+
+    def missing_host_key(self, client, hostname, key):
+        pass
+
+
+def _connect(
+    host: str, creds: list[Credential], first: int | None, timeout: float, known: HostKey | None = None
+) -> tuple[paramiko.SSHClient, int]:
     """Prueba las credenciales en orden (empezando por `first`, la que funciono antes).
 
     Devuelve (cliente, slot 1-based). Solo un fallo de autenticacion pasa a la siguiente;
     timeouts o conexion rechazada cortan, porque otra clave no los arregla.
+
+    Con `known`, paramiko compara la host key en el intercambio de claves, antes de autenticar:
+    si no coincide lanza BadHostKeyException y ninguna contrasena sale hacia ese host.
     """
     order = list(range(len(creds)))
     if first is not None and 1 <= first <= len(creds):
@@ -58,7 +86,9 @@ def _connect(host: str, creds: list[Credential], first: int | None, timeout: flo
     for i in order:
         # Cliente nuevo por intento: dropbear corta la sesion tras un auth fallido.
         ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        if known is not None:
+            ssh.get_host_keys().add(host, known[0], _pkey(*known))
+        ssh.set_missing_host_key_policy(_TrustOnFirstUse())
         try:
             ssh.connect(
                 host,
@@ -79,11 +109,14 @@ def _connect(host: str, creds: list[Credential], first: int | None, timeout: flo
     raise paramiko.AuthenticationException(f"ninguna credencial funciono ({len(creds)} probadas)")
 
 
-def collect(host: str, creds: list[Credential], first: int | None = None, timeout: float = 10) -> dict:
+def collect(
+    host: str, creds: list[Credential], first: int | None = None, timeout: float = 10, known: HostKey | None = None
+) -> dict:
     """Devuelve {'host', 'ok', ...}. Nunca lanza por errores de red o SSH."""
     ssh = None
     try:
-        ssh, slot = _connect(host, creds, first, timeout)
+        ssh, slot = _connect(host, creds, first, timeout, known)
+        host_key = _server_key(ssh)
         mca = parse_mca_status(_run(ssh, "mca-status", timeout))
         cfg = parse_system_cfg(_run(ssh, "cat /tmp/system.cfg", timeout))
         role = classify_role(mca, cfg)
@@ -95,6 +128,7 @@ def collect(host: str, creds: list[Credential], first: int | None = None, timeou
             "host": host,
             "ok": True,
             "cred_slot": slot,
+            "host_key": host_key,
             "role": role,
             "mac": wlan_mac or _mac(mca.get("deviceId")),
             "device_id": _mac(mca.get("deviceId")),
@@ -116,6 +150,8 @@ def collect(host: str, creds: list[Credential], first: int | None = None, timeou
             leases = parse_dhcpd_leases(_run(ssh, "cat /var/tmp/dhcpd.leases", timeout))
             result["leases"] = [asdict(l) for l in leases]
         return result
+    except paramiko.BadHostKeyException:
+        return {"host": host, "ok": False, "error": HOST_KEY_CHANGED}
     # OSError cubre timeouts y conexiones rechazadas; SSHException cubre auth y negociacion.
     except (paramiko.SSHException, OSError) as e:
         return {"host": host, "ok": False, "error": f"{type(e).__name__}: {e}"}

@@ -2,11 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AutoRefresh } from "@/components/client";
+import { AutoRefresh, ConfirmForm, SubmitButton } from "@/components/client";
 import { Empty, ScanState, TableRegion } from "@/components/ui";
 import { ApiError, apiFetch } from "@/lib/api";
 import { dateTime } from "@/lib/format";
+import { getMe } from "@/lib/session";
 import type { ScanDetail } from "@/lib/types";
+
+import { forgetHostKey } from "../../actions";
+
+// Texto que pone el collector cuando la host key no coincide (backend/collector.py HOST_KEY_CHANGED).
+const isHostKeyChange = (error: string) =>
+  error.startsWith("host key distinta");
 
 export const metadata: Metadata = { title: "Escaneo" };
 
@@ -23,6 +30,7 @@ export default async function ScanPage({
     throw e;
   }
   const busy = scan.status === "pending" || scan.status === "running";
+  const admin = (await getMe()).role === "admin";
 
   return (
     <article className="flex flex-col gap-4">
@@ -73,6 +81,21 @@ export default async function ScanPage({
                     </th>
                     <td className="max-w-none whitespace-normal text-muted">
                       {e.error}
+                      {admin && isHostKeyChange(e.error) ? (
+                        <ConfirmForm
+                          action={forgetHostKey}
+                          message={`Aceptar el equipo nuevo en ${e.host}? Hacelo solo si sabes que se reemplazo la antena.`}
+                          className="mt-2"
+                        >
+                          <input type="hidden" name="ip" value={e.host} />
+                          <SubmitButton
+                            className="btn btn-sm btn-danger"
+                            pendingText="..."
+                          >
+                            Aceptar equipo reemplazado
+                          </SubmitButton>
+                        </ConfirmForm>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

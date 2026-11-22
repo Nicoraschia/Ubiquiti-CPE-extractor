@@ -83,6 +83,15 @@ export async function addSubnet(
   );
 }
 
+const Ipv4 = z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/, "IP invalida");
+
+/** Equipo reemplazado: olvida su host key para que el proximo escaneo registre la nueva. */
+export async function forgetHostKey(form: FormData): Promise<void> {
+  const ip = Ipv4.parse(form.get("ip"));
+  await apiFetch(`/api/hostkeys/${ip}`, { method: "DELETE" });
+  revalidatePath("/escaneos");
+}
+
 export async function setSubnetEnabled(form: FormData): Promise<void> {
   const id = Id.parse(form.get("id"));
   const enabled = form.get("enabled") === "true";

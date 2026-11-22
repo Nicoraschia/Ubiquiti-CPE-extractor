@@ -160,6 +160,14 @@ def save_result(conn: psycopg.Connection, scan_id: int, r: dict) -> None:
         return
 
     conn.execute(_UPSERT_SSH, {**r, "ip": r["host"], "config": Jsonb(r["config"]), "scan_id": scan_id})
+    if r.get("host_key"):
+        # Nunca pisa una clave distinta: el collector ya rechazo esa conexion antes de llegar aca.
+        conn.execute(
+            """INSERT INTO ssh_host_keys (ip, key_type, key_b64) VALUES (%s, %s, %s)
+               ON CONFLICT (ip) DO UPDATE SET last_seen = now()
+               WHERE ssh_host_keys.key_type = EXCLUDED.key_type AND ssh_host_keys.key_b64 = EXCLUDED.key_b64""",
+            (r["host"], *r["host_key"]),
+        )
     for s in r.get("stations", []):
         params = {**s, "ap_mac": r["mac"], "scan_id": scan_id}
         conn.execute(_UPSERT_STATION, params)
@@ -173,6 +181,19 @@ def cred_slots_by_ip(conn: psycopg.Connection) -> dict[str, int]:
     """IP -> credencial que funciono la ultima vez, para probarla primero."""
     rows = _tuples(conn).execute("SELECT host(ip), cred_slot FROM devices WHERE cred_slot IS NOT NULL AND ip IS NOT NULL")
     return dict(rows.fetchall())
+
+
+def host_keys(conn: psycopg.Connection) -> dict[str, tuple[str, str]]:
+    """IP -> host key registrada, para verificar cada equipo antes de mandarle credenciales."""
+    rows = _tuples(conn).execute("SELECT host(ip), key_type, key_b64 FROM ssh_host_keys").fetchall()
+    return {ip: (kt, kb) for ip, kt, kb in rows}
+
+
+def forget_host_key(conn: psycopg.Connection, ip: str) -> bool:
+    """Equipo reemplazado legitimamente: el proximo escaneo registra su clave nueva."""
+    row = _tuples(conn).execute("DELETE FROM ssh_host_keys WHERE ip = %s::inet RETURNING ip", (ip,)).fetchone()
+    conn.commit()
+    return row is not None
 
 
 def list_devices(conn: psycopg.Connection, role: str | None, search: str | None) -> list[tuple]:

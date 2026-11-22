@@ -156,3 +156,12 @@ CREATE TABLE IF NOT EXISTS audit_log (
     ip      inet
 );
 CREATE INDEX IF NOT EXISTS audit_log_at ON audit_log (at DESC);
+
+-- Host key SSH de cada equipo (trust on first use). Si cambia, el scanner no le manda credenciales.
+CREATE TABLE IF NOT EXISTS ssh_host_keys (
+    ip          inet PRIMARY KEY,
+    key_type    text NOT NULL,
+    key_b64     text NOT NULL,
+    first_seen  timestamptz NOT NULL DEFAULT now(),
+    last_seen   timestamptz NOT NULL DEFAULT now()
+);

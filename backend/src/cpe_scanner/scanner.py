@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import psycopg
 
 from . import db
-from .collector import Credential, collect
+from .collector import Credential, HostKey, collect
 from .discovery import discover
 
 
@@ -31,11 +31,15 @@ def credentials(interactive: bool) -> list[Credential]:
 
 
 def collect_all(
-    hosts: list[str], creds: list[Credential], workers: int, preferred: dict[str, int] | None = None
+    hosts: list[str],
+    creds: list[Credential],
+    workers: int,
+    preferred: dict[str, int] | None = None,
+    known_keys: dict[str, HostKey] | None = None,
 ) -> Iterator[dict]:
-    preferred = preferred or {}
+    preferred, known_keys = preferred or {}, known_keys or {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        yield from pool.map(lambda h: collect(h, creds, preferred.get(h)), hosts)
+        yield from pool.map(lambda h: collect(h, creds, preferred.get(h), known=known_keys.get(h)), hosts)
 
 
 def run_scan(
@@ -49,7 +53,7 @@ def run_scan(
     """Escanea y guarda. Devuelve (alive, ok, failed); no marca el scan como terminado."""
     alive = discover(cidr)
     ok = failed = 0
-    for r in collect_all(alive, creds, workers, db.cred_slots_by_ip(conn)):
+    for r in collect_all(alive, creds, workers, db.cred_slots_by_ip(conn), db.host_keys(conn)):
         db.save_result(conn, scan_id, r)
         if r["ok"] and r.get("mac"):
             ok += 1

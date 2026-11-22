@@ -19,6 +19,7 @@ const ACTION: Record<string, string> = {
   scan_request: "pidio escaneo",
   user_add: "creo usuario",
   user_update: "modifico usuario",
+  hostkey_forget: "acepto host key nueva",
 };
 
 const ALERT = new Set(["login_failed", "login_throttled"]);
