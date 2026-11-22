@@ -196,11 +196,21 @@
   }
 
   /* ---------- tablas ---------- */
+  /* En pantallas chicas la tabla se desplaza de costado dentro de su caja. */
   .table-wrap {
-    overflow: auto;
+    overflow-x: auto;
     max-inline-size: 100%;
-    /* Scroll propio: el encabezado de columnas queda fijo en tablas largas. */
-    max-block-size: calc(100dvh - 140px);
+  }
+  /* En escritorio scrollea la pagina (nada queda escondido en una caja con scroll propio) y el
+     encabezado de columnas se fija bajo la barra superior. clip no crea contenedor de scroll,
+     asi que no rompe el sticky. */
+  @media (min-width: 1024px) {
+    .table-wrap {
+      overflow: clip;
+    }
+    .data thead th {
+      top: 52px;
+    }
   }
   .data {
     width: 100%;
@@ -394,7 +404,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface);
-    overflow: hidden;
+    overflow: clip;
   }
 
   kbd {
