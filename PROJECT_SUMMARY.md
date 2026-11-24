@@ -32,6 +32,7 @@
   - Tests: 66 backend contra Postgres, 3 unitarios web, QA Playwright 29/29 (admin, viewer, CSP, cookie, open redirect, movil, claro/oscuro).
 - Orden por columna en todas las tablas (2026-11-24): en el navegador las que llegan completas (`SortableTable`), en el servidor las paginadas (Equipos, Routers LAN). Orden natural en espanol con la collation ICU `es_natural`; vacios al final. Equipos paso de ~500 a ~105 ms por pedido (routers LAN agregados en una pasada). Corregido: formulario de resetear clave tapado en Usuarios. 70 tests backend, 6 unitarios web, QA de 12 tablas en el lab.
 - Routers LAN paginado de a 200 y scroll de pagina en tablas largas (2026-11-22).
+- Resuelto 2026-11-24: los 69 CPE de 192.168.18.0/24 cuelgan de 6 AP con gestion en 10.18.1.0/24; al cargar esa subnet quedaron 0 CPE sin AP en las 5 redes (303 CPE, 26 AP). 192.168.18.0/24 no tiene AP propios. Los escaneos con 0 equipos (65 y 68) no se repitieron en los ultimos.
 
 ## Proximo
 - Opcional: normalizar fabricante a marca (Huawei Technologies/Huawei Device -> Huawei; TP-LINK/TP-Link Systems/Mercury/Mercusys -> TP-Link) para filtros mas simples.
@@ -42,8 +43,6 @@
 - Opcional: renombrar subnets desde la web (192.168.18.0/24 quedo con nombre "string").
 
 ## Bloqueos / pendientes
-- 22 leases detras de CPE 192.168.18.x salen sin AP: sus AP no estan en ninguna subnet cargada.
-- 192.168.18.0/24: los escaneos 65 y 68 encontraron 0 equipos (antes 67). Revisar conectividad/ruta desde el servidor.
 - paramiko 3.5.1 tiene CVE-2026-44405 (SHA-1 en RSA): riesgo aceptado, airOS dropbear solo habla ssh-rsa.
 - Rotar API_TOKEN (quedo expuesto en una captura); ahora es opcional, la web no lo usa.
 - macOS re-marca como `hidden` el `.pth` del venv de `backend/` y Python lo ignora: correr con `PYTHONPATH=src` (pytest ya lo tiene configurado).
