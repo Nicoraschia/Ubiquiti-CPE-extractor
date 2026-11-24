@@ -59,8 +59,8 @@ const sorted = (values: SortValue[], dir: SortDir) =>
 
 test("orden alfabetico en espanol, sin distinguir mayusculas y con numeros naturales", () => {
   assert.deepEqual(
-    sorted(["AVILA", "abel", "Ñandu", "Nuñez", "Ángel"], "asc"),
-    ["abel", "Ángel", "AVILA", "Nuñez", "Ñandu"],
+    sorted(["AVILA", " abel", "Ñandu", "Nuñez", "Ángel"], "asc"),
+    [" abel", "Ángel", "AVILA", "Nuñez", "Ñandu"],
   );
   assert.deepEqual(sorted(["AP_10", "AP_2"], "asc"), ["AP_2", "AP_10"]);
 });

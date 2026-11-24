@@ -19,7 +19,7 @@ export function compareValues(
   const r =
     typeof a === "number" && typeof b === "number"
       ? a - b
-      : collator.compare(String(a), String(b));
+      : collator.compare(String(a).trim(), String(b).trim());
   return dir === "asc" ? r : -r;
 }
 

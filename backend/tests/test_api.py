@@ -127,7 +127,7 @@ def test_multi_word_search_requires_all_terms(client, api_env):
 
 def test_devices_sort_like_a_person_would(client, api_env):
     scan = db.start_scan(api_env, None)
-    names = ["AVILA", "abel", "Nuñez", "Ñandu", "AP_10", "AP_2"]
+    names = ["AVILA", " abel", "Nuñez", "Ñandu", "AP_10", "AP_2"]
     db.save_result(api_env, scan, f.ap([
         f.station(mac=f"aa:bb:cc:00:01:{i:02x}", ip=f"10.9.0.{i + 1}", name=n, platform="OrdenTest")
         for i, n in enumerate(names)
@@ -138,7 +138,7 @@ def test_devices_sort_like_a_person_would(client, api_env):
         assert r.status_code == 200, r.text
         return [d["name"] for d in r.json()["items"]]
 
-    expected = ["abel", "AP_2", "AP_10", "AVILA", "Nuñez", "Ñandu"]
+    expected = [" abel", "AP_2", "AP_10", "AVILA", "Nuñez", "Ñandu"]
     assert order(sort="name") == expected
     assert order(sort="name", order="desc") == expected[::-1]
 

@@ -147,7 +147,8 @@ def _all_match(haystack: str, param: str) -> str:
 
 
 def _text(expr: str) -> str:
-    return f"({expr}) COLLATE es_natural"
+    # btrim: hay equipos con espacios delante del nombre, que si no quedarian antes de la A.
+    return f"btrim({expr}) COLLATE es_natural"
 
 
 _LAN_HOST = "coalesce(cl.hostname, cl.mac::text) COLLATE es_natural"
@@ -156,11 +157,19 @@ _LAN_HOST = "coalesce(cl.hostname, cl.mac::text) COLLATE es_natural"
 _SORTS = {
     "name": _text("coalesce(d.name, d.mac::text)"), "signal": "d.signal", "ip": "d.ip", "role": "d.role",
     "platform": _text("d.platform"), "last_seen": "d.last_seen", "ap": _text("coalesce(ap.name, d.ap_mac::text)"),
-    "lan": f"(SELECT min({_LAN_HOST}) FROM current_leases cl WHERE cl.cpe_mac = d.mac)",
+    "lan": "lan.first_host",
 }
 
-_DEVICE_FILTERS = f"""
-FROM devices d LEFT JOIN devices ap ON ap.mac = d.ap_mac
+_DEVICE_FROM = "FROM devices d LEFT JOIN devices ap ON ap.mac = d.ap_mac"
+
+# Agregado en una sola pasada: como subconsulta por equipo tardaba ~2 ms cada uno.
+_LAN_JOIN = f"""LEFT JOIN (
+    SELECT cl.cpe_mac, min({_LAN_HOST}) AS first_host, array_agg(DISTINCT {_LAN_HOST}) AS hosts,
+           array_agg(DISTINCT cl.vendor) FILTER (WHERE cl.vendor IS NOT NULL) AS vendors
+    FROM current_leases cl GROUP BY cl.cpe_mac
+) lan ON lan.cpe_mac = d.mac"""
+
+_DEVICE_WHERE = f"""
 WHERE (%(role)s::text IS NULL OR d.role = %(role)s)
   AND (%(ap)s::macaddr IS NULL OR d.ap_mac = %(ap)s::macaddr)
   AND (%(platform)s::text IS NULL OR d.platform ILIKE %(platform)s)
@@ -193,16 +202,13 @@ def list_devices(
         "q": _terms(q), "role": role, "ap": ap, "platform": _like(platform), "lan": _terms(lan),
         "source": source, "signal_max": signal_max, "limit": limit, "offset": offset,
     }
-    total = conn.execute(f"SELECT count(*) AS n {_DEVICE_FILTERS}", params).fetchone()["n"]
+    total = conn.execute(f"SELECT count(*) AS n {_DEVICE_FROM} {_DEVICE_WHERE}", params).fetchone()["n"]
     items = conn.execute(
         f"""SELECT d.mac::text AS mac, host(d.ip) AS ip, d.role, d.name, d.platform, d.firmware, d.ssid,
                    d.signal, d.netmode, d.shaper_in, d.shaper_out, d.source, d.last_seen,
                    d.ap_mac::text AS ap_mac, ap.name AS ap_name,
-                   (SELECT array_agg(DISTINCT {_LAN_HOST})
-                      FROM current_leases cl WHERE cl.cpe_mac = d.mac) AS lan_hosts,
-                   (SELECT array_agg(DISTINCT cl.vendor) FILTER (WHERE cl.vendor IS NOT NULL)
-                      FROM current_leases cl WHERE cl.cpe_mac = d.mac) AS lan_vendors
-            {_DEVICE_FILTERS}
+                   lan.hosts AS lan_hosts, lan.vendors AS lan_vendors
+            {_DEVICE_FROM} {_LAN_JOIN} {_DEVICE_WHERE}
             ORDER BY {_SORTS[sort]} {order} NULLS LAST, d.mac
             LIMIT %(limit)s OFFSET %(offset)s""",
         params,
