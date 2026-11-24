@@ -1,7 +1,7 @@
 # Ubiquiti CPE Extractor
 
 **Estado:** activo (v2 completo en lab: backend + web; Fase 4 pendiente)
-**Ultima actualizacion:** 2026-11-22
+**Ultima actualizacion:** 2026-11-24
 
 ## Hecho
 - Scripts CLI: `Cpe_leases/ssh_lista_leases.py` (system.cfg + dhcpd.leases) y `Stations on the AP/` (wstalist).
@@ -30,11 +30,13 @@
   - Seguridad: cookie `__Host-` httpOnly/Secure/Strict (el navegador nunca ve la API ni el token), CSP estricto con nonce por request (sin cacheComponents), Caddy HTTPS con CA interna y HSTS como unico servicio expuesto, red `edge` aislada (Caddy no alcanza API ni Postgres), contenedores sin root, read-only y sin capabilities.
   - Auditoria /cso: 2 hallazgos corregidos. Open redirect post-login con TAB en `next` y host keys SSH (TOFU en `ssh_host_keys`: si la clave cambia no se mandan credenciales; un admin acepta el equipo reemplazado desde el detalle del escaneo). Verificado en vivo contra equipos reales.
   - Tests: 66 backend contra Postgres, 3 unitarios web, QA Playwright 29/29 (admin, viewer, CSP, cookie, open redirect, movil, claro/oscuro).
+- Orden por columna en todas las tablas (2026-11-24): en el navegador las que llegan completas (`SortableTable`), en el servidor las paginadas (Equipos, Routers LAN). Orden natural en espanol con la collation ICU `es_natural`; vacios al final. Equipos paso de ~500 a ~105 ms por pedido (routers LAN agregados en una pasada). Corregido: formulario de resetear clave tapado en Usuarios. 70 tests backend, 6 unitarios web, QA de 12 tablas en el lab.
+- Routers LAN paginado de a 200 y scroll de pagina en tablas largas (2026-11-22).
 
 ## Proximo
 - Opcional: normalizar fabricante a marca (Huawei Technologies/Huawei Device -> Huawei; TP-LINK/TP-Link Systems/Mercury/Mercusys -> TP-Link) para filtros mas simples.
 - Fase 4: vivo por CPE + eventos de desconexion.
-- Crear el primer admin real: `docker compose run --rm scanner user add <usuario> --role admin`.
+- Login contra Authentik (pospuesto por el usuario el 2026-11-24): recomendado OIDC con boton en el login y un admin local de emergencia; LDAP solo si la clave tiene que escribirse en nuestra pantalla.
 - Instalar la raiz de la CA de Caddy en las PCs de soporte (o usar un certificado propio).
 - Riesgo residual SSH: una IP nunca vista recibe credenciales en su primer contacto (TOFU no lo cubre). Opcion: aprobar hosts nuevos que no aparezcan en el wstalist de un AP.
 - Opcional: renombrar subnets desde la web (192.168.18.0/24 quedo con nombre "string").
