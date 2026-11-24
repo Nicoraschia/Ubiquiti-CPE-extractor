@@ -146,9 +146,17 @@ def _all_match(haystack: str, param: str) -> str:
             f"SELECT 1 FROM unnest(%({param})s::text[]) t WHERE NOT ({haystack} ILIKE t)))")
 
 
+def _text(expr: str) -> str:
+    return f"({expr}) COLLATE es_natural"
+
+
+_LAN_HOST = "coalesce(cl.hostname, cl.mac::text) COLLATE es_natural"
+
+# Se ordena por lo que la pantalla muestra: sin nombre se ve la MAC.
 _SORTS = {
-    "name": "d.name", "signal": "d.signal", "ip": "d.ip", "platform": "d.platform",
-    "last_seen": "d.last_seen", "ap": "ap.name",
+    "name": _text("coalesce(d.name, d.mac::text)"), "signal": "d.signal", "ip": "d.ip", "role": "d.role",
+    "platform": _text("d.platform"), "last_seen": "d.last_seen", "ap": _text("coalesce(ap.name, d.ap_mac::text)"),
+    "lan": f"(SELECT min({_LAN_HOST}) FROM current_leases cl WHERE cl.cpe_mac = d.mac)",
 }
 
 _DEVICE_FILTERS = f"""
@@ -176,7 +184,7 @@ def list_devices(
     lan: Annotated[str | None, Query(description="router LAN, palabras (todas en el mismo lease): hostname, fabricante, MAC o IP")] = None,
     source: Literal["ssh", "wstalist"] | None = None,
     signal_max: Annotated[int | None, Query(description="senal <= este valor (ej. -70)")] = None,
-    sort: Literal["name", "signal", "ip", "platform", "last_seen", "ap"] = "name",
+    sort: Literal["name", "signal", "ip", "role", "platform", "last_seen", "ap", "lan"] = "name",
     order: Literal["asc", "desc"] = "asc",
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -190,7 +198,7 @@ def list_devices(
         f"""SELECT d.mac::text AS mac, host(d.ip) AS ip, d.role, d.name, d.platform, d.firmware, d.ssid,
                    d.signal, d.netmode, d.shaper_in, d.shaper_out, d.source, d.last_seen,
                    d.ap_mac::text AS ap_mac, ap.name AS ap_name,
-                   (SELECT array_agg(DISTINCT coalesce(cl.hostname, cl.mac::text))
+                   (SELECT array_agg(DISTINCT {_LAN_HOST})
                       FROM current_leases cl WHERE cl.cpe_mac = d.mac) AS lan_hosts,
                    (SELECT array_agg(DISTINCT cl.vendor) FILTER (WHERE cl.vendor IS NOT NULL)
                       FROM current_leases cl WHERE cl.cpe_mac = d.mac) AS lan_vendors
@@ -256,12 +264,28 @@ def lease_vendors(conn: Conn) -> list[dict]:
     ).fetchall()
 
 
+# Misma agrupacion que brand() en frontend/lib/format.ts: se ordena por la marca que se ve.
+_BRANDS = [
+    ("huawei", "Huawei"), ("tp-?link|mercusys|mercury", "TP-Link"), ("mikrotik|routerboard", "MikroTik"),
+    ("ubiquiti", "Ubiquiti"), ("tenda", "Tenda"), ("zte", "ZTE"), ("d-?link", "D-Link"), ("xiaomi", "Xiaomi"),
+    ("samsung", "Samsung"), ("apple", "Apple"), ("privada", "MAC privada"),
+]
+_BRAND_CASE = " ".join(f"WHEN cl.vendor ~* '{regex}' THEN '{name}'" for regex, name in _BRANDS)
+
+_LEASE_SORTS = {
+    "hostname": _text("cl.hostname"), "vendor": _text(f"CASE {_BRAND_CASE} ELSE cl.vendor END"), "ip": "cl.ip",
+    "mac": "cl.mac", "cpe": _text("coalesce(d.name, d.mac::text)"), "cpe_ip": "d.ip", "ap": _text("ap.name"),
+}
+
+
 @api.get("/leases")
 def list_leases(
     conn: Conn,
     q: Annotated[str | None, Query(
         description="palabras (todas deben estar): hostname, fabricante, MAC o IP del router; nombre o IP del CPE; AP"
     )] = None,
+    sort: Literal["hostname", "vendor", "ip", "mac", "cpe", "cpe_ip", "ap"] = "hostname",
+    order: Literal["asc", "desc"] = "asc",
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[dict]:
@@ -274,7 +298,7 @@ def list_leases(
             JOIN devices d ON d.mac = cl.cpe_mac
             LEFT JOIN devices ap ON ap.mac = d.ap_mac
             WHERE {_all_match(haystack, "q")}
-            ORDER BY cl.hostname NULLS LAST, d.name, cl.mac
+            ORDER BY {_LEASE_SORTS[sort]} {order} NULLS LAST, d.name, d.mac, cl.mac
             LIMIT %(limit)s OFFSET %(offset)s""",
         {"q": _terms(q), "limit": limit, "offset": offset},
     ).fetchall()

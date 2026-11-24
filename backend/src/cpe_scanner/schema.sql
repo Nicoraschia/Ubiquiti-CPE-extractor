@@ -165,3 +165,7 @@ CREATE TABLE IF NOT EXISTS ssh_host_keys (
     first_seen  timestamptz NOT NULL DEFAULT now(),
     last_seen   timestamptz NOT NULL DEFAULT now()
 );
+
+-- Orden como lo haria una persona: sin distinguir mayusculas, ñ despues de n y AP_2 antes que AP_10.
+-- La collation por defecto de la base es C, que pone todas las mayusculas primero.
+CREATE COLLATION IF NOT EXISTS es_natural (provider = icu, locale = 'es-u-kn-true');

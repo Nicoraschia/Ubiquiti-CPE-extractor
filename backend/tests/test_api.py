@@ -125,6 +125,65 @@ def test_multi_word_search_requires_all_terms(client, api_env):
     assert devices(lan="huawei 192.168.9.7") == []
 
 
+def test_devices_sort_like_a_person_would(client, api_env):
+    scan = db.start_scan(api_env, None)
+    names = ["AVILA", "abel", "Nuñez", "Ñandu", "AP_10", "AP_2"]
+    db.save_result(api_env, scan, f.ap([
+        f.station(mac=f"aa:bb:cc:00:01:{i:02x}", ip=f"10.9.0.{i + 1}", name=n, platform="OrdenTest")
+        for i, n in enumerate(names)
+    ]))
+
+    def order(**params):
+        r = client.get("/api/devices", params={"platform": "OrdenTest", **params}, headers=AUTH)
+        assert r.status_code == 200, r.text
+        return [d["name"] for d in r.json()["items"]]
+
+    expected = ["abel", "AP_2", "AP_10", "AVILA", "Nuñez", "Ñandu"]
+    assert order(sort="name") == expected
+    assert order(sort="name", order="desc") == expected[::-1]
+
+
+def test_devices_sort_by_role_and_lan(client):
+    def macs(**params):
+        return [d["mac"] for d in client.get("/api/devices", params=params, headers=AUTH).json()["items"]]
+
+    assert macs(sort="role")[0] == f.AP_MAC
+    assert macs(sort="role", order="desc")[-1] == f.AP_MAC
+    # El unico con router LAN va primero en los dos sentidos: los vacios quedan al final.
+    assert macs(sort="lan")[0] == macs(sort="lan", order="desc")[0] == f.CPE_MAC
+
+
+def test_leases_sort(client, api_env):
+    from cpe_scanner import oui
+
+    # Se muestran por marca: Mercusys es TP-Link y tiene que quedar junto a ella, no en la M.
+    oui.replace_vendors(api_env, [("48B25D", "HUAWEI TECHNOLOGIES CO.,LTD"), ("AC15A2", "TP-Link Systems Inc."),
+                                  ("3C5282", "Mercusys Technologies"), ("B827EB", "Raspberry Pi Foundation")])
+    scan = db.start_scan(api_env, None)
+    db.save_result(api_env, scan, f.cpe(leases=[
+        dict(lease_time=1, mac=m, ip=ip, hostname=h, client_id=None) for m, ip, h in [
+            ("48:b2:5d:00:00:01", "192.168.9.10", "R10"), ("ac:15:a2:00:00:01", "192.168.9.2", "r2"),
+            ("3c:52:82:00:00:01", "192.168.9.30", None), ("b8:27:eb:00:00:01", "10.0.0.5", "Alfa"),
+        ]
+    ]))
+
+    def ips(**params):
+        r = client.get("/api/leases", params=params, headers=AUTH)
+        assert r.status_code == 200, r.text
+        return [x["ip"] for x in r.json()]
+
+    assert ips(sort="ip") == ["10.0.0.5", "192.168.9.2", "192.168.9.10", "192.168.9.30"]
+    assert ips(sort="ip", order="desc") == ["192.168.9.30", "192.168.9.10", "192.168.9.2", "10.0.0.5"]
+    assert ips(sort="hostname") == ["10.0.0.5", "192.168.9.2", "192.168.9.10", "192.168.9.30"]  # sin hostname al final
+    assert ips(sort="hostname", order="desc")[-1] == "192.168.9.30"
+    vendors = ips(sort="vendor")
+    assert vendors[0] == "192.168.9.10" and vendors[1] == "10.0.0.5"  # Huawei, Raspberry
+    assert set(vendors[2:]) == {"192.168.9.2", "192.168.9.30"}  # TP-Link y Mercusys juntos
+    for field in ("mac", "cpe", "cpe_ip", "ap"):
+        assert len(ips(sort=field)) == 4
+    assert client.get("/api/leases", params={"sort": "drop table"}, headers=AUTH).status_code == 422
+
+
 def test_leases_pagination(client, api_env):
     scan = db.start_scan(api_env, None)
     leases = [dict(lease_time=i, mac=f"48:b2:5d:00:00:{i:02x}", ip=f"192.168.9.{i}", hostname=f"R{i:02d}",
