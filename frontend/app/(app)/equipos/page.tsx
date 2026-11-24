@@ -20,7 +20,16 @@ import type { DevicePage } from "@/lib/types";
 export const metadata: Metadata = { title: "Equipos" };
 
 const LIMIT = 100;
-const SORTS = ["name", "signal", "ip", "platform", "last_seen", "ap"] as const;
+const SORTS = [
+  "name",
+  "signal",
+  "ip",
+  "role",
+  "platform",
+  "last_seen",
+  "ap",
+  "lan",
+] as const;
 
 function readFilters(sp: SP) {
   const ap = one(sp, "ap");
@@ -218,7 +227,15 @@ export default async function EquiposPage({
                     params={f}
                     defaultField="name"
                   />
-                  {f.role ? null : <th scope="col">Rol</th>}
+                  {f.role ? null : (
+                    <SortTh
+                      label="Rol"
+                      field="role"
+                      base="/equipos"
+                      params={f}
+                      defaultField="name"
+                    />
+                  )}
                   <SortTh
                     label="Modelo"
                     field="platform"
@@ -240,7 +257,13 @@ export default async function EquiposPage({
                     params={f}
                     defaultField="name"
                   />
-                  <th scope="col">Router LAN</th>
+                  <SortTh
+                    label="Router LAN"
+                    field="lan"
+                    base="/equipos"
+                    params={f}
+                    defaultField="name"
+                  />
                   <SortTh
                     label="Visto"
                     field="last_seen"
@@ -302,7 +325,12 @@ export default async function EquiposPage({
                             ) : null}
                           </>
                         ) : (
-                          <>{hosts.length} dispositivos</>
+                          <>
+                            {hosts[0]}
+                            <span className="ml-1.5 text-[12px] text-faint">
+                              +{hosts.length - 1}
+                            </span>
+                          </>
                         )}
                       </td>
                       <td>

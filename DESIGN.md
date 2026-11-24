@@ -50,6 +50,7 @@
 - **Shell:** 52px icon rail (Equipos, APs, Routers LAN, Escaneos, Subnets, Usuarios, Auditoria) + 52px top bar with global search (`/` or Cmd+K) and the user/role.
 - **Global search is the main navigation:** a MAC, IP, client or router name jumps to the detail.
 - **Tables:** sticky header, the sorted column in `--text`, critical row with a 2px `--crit` inner edge on the left, selected row with `--accent-bg` and a cyan edge.
+- **Sorting:** every data column sorts by clicking its header. Up/down arrows in `--faint`; the active direction in `--text`. Empty values always last. Fully loaded tables sort in the browser (`SortableTable`); paginated ones sort on the server by URL (`SortTh`).
 - **Radius:** sm 4 (chips, kbd) · md 6 (buttons, inputs) · lg 8 (panels). Nothing rounder.
 - **Responsive:** primary use is desktop. On mobile the tables keep their key columns (name, signal, AP) with no page-level horizontal scroll.
 
@@ -71,3 +72,4 @@
 | 2026-11-22 | No brand color | Color reserved for state so problems stand out with nothing to compete against. |
 | 2026-11-22 | IBM Plex (Sans/Condensed/Mono) | Network-gear feel, excellent tabular digits, condensed fits more columns. Inter rejected for being generic. |
 | 2026-11-22 | Signal = bars + color + number | Readable for colorblind users and at a glance. |
+| 2026-11-24 | All table columns sortable with arrows | Requested by the user. Sorting by raw value, not by formatted text. |

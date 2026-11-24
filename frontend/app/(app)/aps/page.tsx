@@ -2,72 +2,51 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SignalMeter } from "@/components/signal-meter";
+import { SortableTable } from "@/components/sortable-table";
 import { Empty, PageHead, TableRegion, When } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
-import { oneOf } from "@/lib/params";
 import { signalLevel } from "@/lib/signal";
+import { ipKey, timeKey } from "@/lib/sort";
 import type { ApSummary } from "@/lib/types";
 
 export const metadata: Metadata = { title: "APs" };
 
-export default async function ApsPage({ searchParams }: PageProps<"/aps">) {
-  const sort =
-    oneOf(await searchParams, "sort", ["name", "worst"] as const) ?? "worst";
+export default async function ApsPage() {
   const aps = await apiFetch<ApSummary[]>("/api/aps");
-  // Por defecto, los AP con el peor CPE arriba: es donde hay que mirar primero.
-  if (sort === "worst")
-    aps.sort((a, b) => (a.worst_signal ?? 0) - (b.worst_signal ?? 0));
 
   return (
     <>
-      <PageHead title="Access points" count={`${aps.length} AP`}>
-        <nav aria-label="Orden" className="flex gap-2">
-          <Link
-            href="/aps"
-            className="chip"
-            data-on={sort === "worst"}
-            aria-current={sort === "worst" ? "true" : undefined}
-          >
-            Peor senal primero
-          </Link>
-          <Link
-            href="/aps?sort=name"
-            className="chip"
-            data-on={sort === "name"}
-            aria-current={sort === "name" ? "true" : undefined}
-          >
-            Por nombre
-          </Link>
-        </nav>
-      </PageHead>
+      <PageHead title="Access points" count={`${aps.length} AP`} />
       {aps.length ? (
         <TableRegion label="Access points">
-          <table className="data">
-            <thead>
-              <tr>
-                <th
-                  scope="col"
-                  aria-sort={sort === "name" ? "ascending" : undefined}
-                >
-                  AP
-                </th>
-                <th scope="col">IP</th>
-                <th scope="col">Modelo</th>
-                <th scope="col">SSID</th>
-                <th scope="col">CPE</th>
-                <th
-                  scope="col"
-                  aria-sort={sort === "worst" ? "ascending" : undefined}
-                >
-                  Peor
-                </th>
-                <th scope="col">Promedio</th>
-                <th scope="col">Visto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {aps.map((ap) => (
-                <tr key={ap.mac} data-level={signalLevel(ap.worst_signal)}>
+          {/* De entrada, los AP con el peor CPE arriba: es donde hay que mirar primero. */}
+          <SortableTable
+            columns={[
+              "AP",
+              "IP",
+              "Modelo",
+              "SSID",
+              "CPE",
+              "Peor",
+              "Promedio",
+              "Visto",
+            ]}
+            initial={{ col: 5, dir: "asc" }}
+            rows={aps.map((ap) => ({
+              id: ap.mac,
+              level: signalLevel(ap.worst_signal),
+              sort: [
+                ap.name ?? ap.mac,
+                ipKey(ap.ip),
+                ap.platform,
+                ap.ssid,
+                ap.stations,
+                ap.worst_signal,
+                ap.avg_signal,
+                timeKey(ap.last_seen),
+              ],
+              cells: (
+                <>
                   <th scope="row">
                     <Link href={`/equipos/${ap.mac}`} className="row-link">
                       {ap.name ?? ap.mac}
@@ -93,10 +72,10 @@ export default async function ApsPage({ searchParams }: PageProps<"/aps">) {
                   <td>
                     <When iso={ap.last_seen} />
                   </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </>
+              ),
+            }))}
+          />
         </TableRegion>
       ) : (
         <div className="panel">

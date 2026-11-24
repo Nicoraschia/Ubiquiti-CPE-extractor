@@ -3,10 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AutoRefresh, ConfirmForm, SubmitButton } from "@/components/client";
+import { SortableTable } from "@/components/sortable-table";
 import { Empty, ScanState, TableRegion } from "@/components/ui";
 import { ApiError, apiFetch } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { getMe } from "@/lib/session";
+import { ipKey } from "@/lib/sort";
 import type { ScanDetail } from "@/lib/types";
 
 import { forgetHostKey } from "../../actions";
@@ -66,16 +68,15 @@ export default async function ScanPage({
         </h2>
         {scan.errors.length ? (
           <TableRegion label="Errores del escaneo">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th scope="col">Host</th>
-                  <th scope="col">Error</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scan.errors.map((e) => (
-                  <tr key={e.host} data-level="crit">
+            <SortableTable
+              columns={["Host", "Error"]}
+              initial={{ col: 0, dir: "asc" }}
+              rows={scan.errors.map((e) => ({
+                id: e.host,
+                level: "crit",
+                sort: [ipKey(e.host), e.error],
+                cells: (
+                  <>
                     <th scope="row" className="num">
                       {e.host}
                     </th>
@@ -97,10 +98,10 @@ export default async function ScanPage({
                         </ConfirmForm>
                       ) : null}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  </>
+                ),
+              }))}
+            />
           </TableRegion>
         ) : (
           <div className="panel">

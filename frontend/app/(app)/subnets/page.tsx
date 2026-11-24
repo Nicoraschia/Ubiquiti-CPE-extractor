@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/client";
+import { SortableTable } from "@/components/sortable-table";
 import { Empty, PageHead, TableRegion, When } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { getMe } from "@/lib/session";
+import { ipKey, timeKey } from "@/lib/sort";
 import type { Subnet } from "@/lib/types";
 
 import { addSubnet, setSubnetEnabled } from "../actions";
@@ -64,23 +66,25 @@ export default async function SubnetsPage() {
 
       {subnets.length ? (
         <TableRegion label="Subnets">
-          <table className="data">
-            <thead>
-              <tr>
-                <th scope="col">Subnet</th>
-                <th scope="col">Nombre</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Alta</th>
-                {admin ? (
-                  <th scope="col">
-                    <span className="visually-hidden">Acciones</span>
-                  </th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {subnets.map((s) => (
-                <tr key={s.id}>
+          <SortableTable
+            columns={[
+              "Subnet",
+              "Nombre",
+              "Estado",
+              "Alta",
+              ...(admin ? [{ hidden: "Acciones" }] : []),
+            ]}
+            initial={{ col: 0, dir: "asc" }}
+            rows={subnets.map((s) => ({
+              id: s.id,
+              sort: [
+                ipKey(s.cidr),
+                s.name,
+                s.enabled ? "se escanea" : "pausada",
+                timeKey(s.created_at),
+              ],
+              cells: (
+                <>
                   <th scope="row" className="num">
                     {s.cidr}
                   </th>
@@ -112,10 +116,10 @@ export default async function SubnetsPage() {
                       </form>
                     </td>
                   ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </>
+              ),
+            }))}
+          />
         </TableRegion>
       ) : (
         <div className="panel">

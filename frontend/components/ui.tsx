@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { ago, dateTime } from "@/lib/format";
 import type { ScanStatus } from "@/lib/types";
 
+import { SortIcon } from "./sort-icon";
+
 export function PageHead({
   title,
   count,
@@ -30,7 +32,7 @@ export function PageHead({
   );
 }
 
-const SCAN_LABEL: Record<ScanStatus, string> = {
+export const SCAN_LABEL: Record<ScanStatus, string> = {
   pending: "en cola",
   running: "escaneando",
   done: "terminado",
@@ -123,8 +125,10 @@ export function SortTh({
           offset: undefined,
         })}
         scroll={false}
+        className="sort"
       >
         {label}
+        <SortIcon />
       </Link>
     </th>
   );

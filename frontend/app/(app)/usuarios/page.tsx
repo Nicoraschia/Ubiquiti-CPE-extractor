@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 
 import { ActionForm } from "@/components/action-form";
 import { ConfirmForm, SubmitButton } from "@/components/client";
+import { SortableTable } from "@/components/sortable-table";
 import { PageHead, TableRegion, When } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { requireAdmin } from "@/lib/session";
+import { timeKey } from "@/lib/sort";
 import type { User } from "@/lib/types";
 
 import { createUser, resetPassword, updateUser } from "../actions";
@@ -75,25 +77,31 @@ export default async function UsuariosPage() {
       </ActionForm>
 
       <TableRegion label="Usuarios">
-        <table className="data">
-          <thead>
-            <tr>
-              <th scope="col">Usuario</th>
-              <th scope="col">Rol</th>
-              <th scope="col">Estado</th>
-              <th scope="col">Ultimo login</th>
-              <th scope="col">Sesiones</th>
-              <th scope="col">Clave cambiada</th>
-              <th scope="col">
-                <span className="visually-hidden">Acciones</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => {
-              const self = u.id === me.id;
-              return (
-                <tr key={u.id}>
+        <SortableTable
+          columns={[
+            "Usuario",
+            "Rol",
+            "Estado",
+            "Ultimo login",
+            "Sesiones",
+            "Clave cambiada",
+            { hidden: "Acciones" },
+          ]}
+          initial={{ col: 0, dir: "asc" }}
+          rows={users.map((u) => {
+            const self = u.id === me.id;
+            return {
+              id: u.id,
+              sort: [
+                u.username,
+                u.role,
+                u.enabled ? "activo" : "desactivado",
+                timeKey(u.last_login_at),
+                u.sessions,
+                timeKey(u.password_changed_at),
+              ],
+              cells: (
+                <>
                   <th scope="row">
                     {u.username}
                     {self ? (
@@ -201,11 +209,11 @@ export default async function UsuariosPage() {
                       </div>
                     )}
                   </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                </>
+              ),
+            };
+          })}
+        />
       </TableRegion>
     </>
   );

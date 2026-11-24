@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 
+import { SortableTable } from "@/components/sortable-table";
 import { Empty, PageHead, TableRegion } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { requireAdmin } from "@/lib/session";
+import { ipKey, timeKey } from "@/lib/sort";
 import type { AuditEntry } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Auditoria" };
@@ -35,22 +37,21 @@ export default async function AuditoriaPage() {
       <PageHead title="Auditoria" count={`ultimos ${entries.length} eventos`} />
       {entries.length ? (
         <TableRegion label="Auditoria">
-          <table className="data">
-            <thead>
-              <tr>
-                <th scope="col">Fecha</th>
-                <th scope="col">Quien</th>
-                <th scope="col">Accion</th>
-                <th scope="col">Detalle</th>
-                <th scope="col">IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr
-                  key={e.id}
-                  data-level={ALERT.has(e.action) ? "crit" : undefined}
-                >
+          <SortableTable
+            columns={["Fecha", "Quien", "Accion", "Detalle", "IP"]}
+            initial={{ col: 0, dir: "desc" }}
+            rows={entries.map((e) => ({
+              id: e.id,
+              level: ALERT.has(e.action) ? "crit" : undefined,
+              sort: [
+                timeKey(e.at),
+                e.actor,
+                ACTION[e.action] ?? e.action,
+                e.detail ? JSON.stringify(e.detail) : null,
+                ipKey(e.ip),
+              ],
+              cells: (
+                <>
                   <td className="num">{dateTime(e.at)}</td>
                   <th scope="row">{e.actor}</th>
                   <td className={ALERT.has(e.action) ? "text-crit" : ""}>
@@ -63,10 +64,10 @@ export default async function AuditoriaPage() {
                     {e.detail ? JSON.stringify(e.detail) : "-"}
                   </td>
                   <td className="num">{e.ip ?? "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </>
+              ),
+            }))}
+          />
         </TableRegion>
       ) : (
         <div className="panel">

@@ -4,12 +4,14 @@ import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 
 import { SignalMeter } from "@/components/signal-meter";
+import { SortableTable } from "@/components/sortable-table";
 import { Sparkline } from "@/components/sparkline";
 import { Empty, TableRegion, When } from "@/components/ui";
 import { ApiError, apiFetch } from "@/lib/api";
 import { brand, dateTime, distance, plan, uptime } from "@/lib/format";
 import { MAC_RE } from "@/lib/params";
 import { signalLevel } from "@/lib/signal";
+import { ipKey, timeKey } from "@/lib/sort";
 import type { DeviceDetail } from "@/lib/types";
 
 // cache: metadata y pagina comparten una sola consulta a la API.
@@ -155,21 +157,21 @@ export default async function DevicePage({
               aria-label="CPE conectados"
               tabIndex={0}
             >
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th scope="col">CPE</th>
-                    <th scope="col" aria-sort="ascending">
-                      Senal
-                    </th>
-                    <th scope="col">IP</th>
-                    <th scope="col">Modelo</th>
-                    <th scope="col">Visto</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {d.stations.map((s) => (
-                    <tr key={s.mac} data-level={signalLevel(s.signal)}>
+              <SortableTable
+                columns={["CPE", "Senal", "IP", "Modelo", "Visto"]}
+                initial={{ col: 1, dir: "asc" }}
+                rows={d.stations.map((s) => ({
+                  id: s.mac,
+                  level: signalLevel(s.signal),
+                  sort: [
+                    s.name ?? s.mac,
+                    s.signal,
+                    ipKey(s.ip),
+                    s.platform,
+                    timeKey(s.last_seen),
+                  ],
+                  cells: (
+                    <>
                       <th scope="row">
                         <Link href={`/equipos/${s.mac}`} className="row-link">
                           {s.name ?? s.mac}
@@ -183,10 +185,10 @@ export default async function DevicePage({
                       <td>
                         <When iso={s.last_seen} />
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </>
+                  ),
+                }))}
+              />
             </div>
           ) : (
             <Empty>Este AP no tenia CPE asociados en el ultimo escaneo.</Empty>
@@ -270,19 +272,20 @@ export default async function DevicePage({
           </h2>
           {d.leases.length ? (
             <TableRegion label="Leases DHCP">
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th scope="col">Hostname</th>
-                    <th scope="col">Fabricante</th>
-                    <th scope="col">IP</th>
-                    <th scope="col">MAC</th>
-                    <th scope="col">Leido</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {d.leases.map((l) => (
-                    <tr key={l.mac}>
+              <SortableTable
+                columns={["Hostname", "Fabricante", "IP", "MAC", "Leido"]}
+                initial={{ col: 2, dir: "asc" }}
+                rows={d.leases.map((l) => ({
+                  id: l.mac,
+                  sort: [
+                    l.hostname,
+                    brand(l.vendor),
+                    ipKey(l.ip),
+                    l.mac,
+                    timeKey(l.seen_at),
+                  ],
+                  cells: (
+                    <>
                       <th scope="row">
                         {l.hostname ?? (
                           <span className="text-faint">sin hostname</span>
@@ -298,10 +301,10 @@ export default async function DevicePage({
                       <td>
                         <When iso={l.seen_at} />
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </>
+                  ),
+                }))}
+              />
             </TableRegion>
           ) : (
             <div className="panel">
@@ -322,19 +325,20 @@ export default async function DevicePage({
             aria-label="Historial de enlace"
             tabIndex={0}
           >
-            <table className="data">
-              <thead>
-                <tr>
-                  <th scope="col">Fecha</th>
-                  <th scope="col">AP</th>
-                  <th scope="col">Senal</th>
-                  <th scope="col">Remota</th>
-                  <th scope="col">Uptime</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.link_history.map((h) => (
-                  <tr key={h.seen_at + h.ap_mac}>
+            <SortableTable
+              columns={["Fecha", "AP", "Senal", "Remota", "Uptime"]}
+              initial={{ col: 0, dir: "desc" }}
+              rows={d.link_history.map((h) => ({
+                id: h.seen_at + h.ap_mac,
+                sort: [
+                  timeKey(h.seen_at),
+                  h.ap_mac,
+                  h.signal,
+                  h.remote_signal,
+                  h.uptime_s,
+                ],
+                cells: (
+                  <>
                     <td className="num">{dateTime(h.seen_at)}</td>
                     <td className="num text-muted">{h.ap_mac}</td>
                     <td>
@@ -342,10 +346,10 @@ export default async function DevicePage({
                     </td>
                     <td className="num">{h.remote_signal ?? "-"}</td>
                     <td className="num">{uptime(h.uptime_s)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  </>
+                ),
+              }))}
+            />
           </div>
         </details>
       ) : null}

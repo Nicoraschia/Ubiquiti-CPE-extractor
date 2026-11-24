@@ -1,26 +1,46 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Empty, hrefWith, PageHead, TableRegion } from "@/components/ui";
+import {
+  Empty,
+  hrefWith,
+  PageHead,
+  SortTh,
+  TableRegion,
+} from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { brand, int } from "@/lib/format";
-import { intParam, one } from "@/lib/params";
+import { intParam, one, oneOf } from "@/lib/params";
 import type { LeaseRow, VendorCount } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Routers LAN" };
 
 const LIMIT = 200;
+const SORTS = [
+  "hostname",
+  "vendor",
+  "ip",
+  "mac",
+  "cpe",
+  "cpe_ip",
+  "ap",
+] as const;
 
 export default async function RoutersPage({
   searchParams,
 }: PageProps<"/routers">) {
   const sp = await searchParams;
   const q = one(sp, "q");
+  const params = {
+    q,
+    sort: oneOf(sp, "sort", SORTS),
+    order: oneOf(sp, "order", ["asc", "desc"] as const),
+  };
   const offset = intParam(sp, "offset", 0, 1_000_000) ?? 0;
   const [page, vendors] = await Promise.all([
     // Uno de mas: si vuelve, hay pagina siguiente (la API no cuenta el total de leases).
     apiFetch<LeaseRow[]>("/api/leases", {
-      query: { q, limit: LIMIT + 1, offset },
+      query: { ...params, limit: LIMIT + 1, offset },
     }),
     apiFetch<VendorCount[]>("/api/leases/vendors"),
   ]);
@@ -36,7 +56,6 @@ export default async function RoutersPage({
   const facets = [...brands].sort((a, b) => b[1] - a[1]).slice(0, 10);
   const hasNext = page.length > LIMIT;
   const rows = page.slice(0, LIMIT);
-  const params = { q };
 
   return (
     <>
@@ -44,7 +63,7 @@ export default async function RoutersPage({
         title="Routers LAN"
         count={
           rows.length
-            ? `${int(offset + 1)}-${int(offset + rows.length)}${hasNext ? " de mas" : ` de ${int(offset + rows.length)}`}`
+            ? `${int(offset + 1)}-${int(offset + rows.length)}${hasNext ? " (hay mas)" : ` de ${int(offset + rows.length)}`}`
             : undefined
         }
       />
@@ -67,6 +86,12 @@ export default async function RoutersPage({
             enterKeyHint="search"
           />
         </div>
+        {params.sort ? (
+          <input type="hidden" name="sort" value={params.sort} />
+        ) : null}
+        {params.order ? (
+          <input type="hidden" name="order" value={params.order} />
+        ) : null}
         <button type="submit" className="btn btn-primary">
           Buscar
         </button>
@@ -80,7 +105,9 @@ export default async function RoutersPage({
         {facets.map(([b, n]) => (
           <Link
             key={b}
-            href={`/routers?q=${encodeURIComponent(b === "Desconocido" ? "" : b)}`}
+            href={hrefWith("/routers", params, {
+              q: b === "Desconocido" ? undefined : b,
+            })}
             className="chip"
             data-on={q?.toLowerCase() === b.toLowerCase()}
           >
@@ -93,13 +120,55 @@ export default async function RoutersPage({
           <table className="data">
             <thead>
               <tr>
-                <th scope="col">Hostname</th>
-                <th scope="col">Fabricante</th>
-                <th scope="col">IP LAN</th>
-                <th scope="col">MAC</th>
-                <th scope="col">CPE</th>
-                <th scope="col">IP CPE</th>
-                <th scope="col">AP</th>
+                <SortTh
+                  label="Hostname"
+                  field="hostname"
+                  base="/routers"
+                  params={params}
+                  defaultField="hostname"
+                />
+                <SortTh
+                  label="Fabricante"
+                  field="vendor"
+                  base="/routers"
+                  params={params}
+                  defaultField="hostname"
+                />
+                <SortTh
+                  label="IP LAN"
+                  field="ip"
+                  base="/routers"
+                  params={params}
+                  defaultField="hostname"
+                />
+                <SortTh
+                  label="MAC"
+                  field="mac"
+                  base="/routers"
+                  params={params}
+                  defaultField="hostname"
+                />
+                <SortTh
+                  label="CPE"
+                  field="cpe"
+                  base="/routers"
+                  params={params}
+                  defaultField="hostname"
+                />
+                <SortTh
+                  label="IP CPE"
+                  field="cpe_ip"
+                  base="/routers"
+                  params={params}
+                  defaultField="hostname"
+                />
+                <SortTh
+                  label="AP"
+                  field="ap"
+                  base="/routers"
+                  params={params}
+                  defaultField="hostname"
+                />
               </tr>
             </thead>
             <tbody>

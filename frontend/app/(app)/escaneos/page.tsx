@@ -3,20 +3,33 @@ import Link from "next/link";
 
 import { ActionForm } from "@/components/action-form";
 import { AutoRefresh, SubmitButton } from "@/components/client";
-import { Empty, PageHead, ScanState, TableRegion, When } from "@/components/ui";
+import { SortableTable } from "@/components/sortable-table";
+import {
+  Empty,
+  PageHead,
+  SCAN_LABEL,
+  ScanState,
+  TableRegion,
+  When,
+} from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { getMe } from "@/lib/session";
+import { ipKey, timeKey } from "@/lib/sort";
 import type { Scan, Subnet } from "@/lib/types";
 
 import { requestScan } from "../actions";
 
 export const metadata: Metadata = { title: "Escaneos" };
 
+function seconds(s: Scan): number | null {
+  const start = timeKey(s.started_at);
+  const end = timeKey(s.finished_at);
+  return start === null || end === null ? null : (end - start) / 1000;
+}
+
 function duration(s: Scan): string {
-  if (!s.started_at || !s.finished_at) return "-";
-  const secs =
-    (new Date(s.finished_at).getTime() - new Date(s.started_at).getTime()) /
-    1000;
+  const secs = seconds(s);
+  if (secs === null) return "-";
   return secs < 60 ? `${secs.toFixed(1)} s` : `${Math.round(secs / 60)} min`;
 }
 
@@ -77,30 +90,38 @@ export default async function EscaneosPage() {
 
       {scans.length ? (
         <TableRegion label="Escaneos">
-          <table className="data">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Subnet</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Origen</th>
-                <th scope="col">Equipos</th>
-                <th scope="col">OK</th>
-                <th scope="col">Fallos</th>
-                <th scope="col">Duracion</th>
-                <th scope="col">Pedido</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scans.map((s) => (
-                <tr
-                  key={s.id}
-                  data-level={
-                    s.status === "failed" || (s.hosts_failed ?? 0) > 0
-                      ? "crit"
-                      : undefined
-                  }
-                >
+          <SortableTable
+            columns={[
+              "#",
+              "Subnet",
+              "Estado",
+              "Origen",
+              "Equipos",
+              "OK",
+              "Fallos",
+              "Duracion",
+              "Pedido",
+            ]}
+            initial={{ col: 0, dir: "desc" }}
+            rows={scans.map((s) => ({
+              id: s.id,
+              level:
+                s.status === "failed" || (s.hosts_failed ?? 0) > 0
+                  ? "crit"
+                  : undefined,
+              sort: [
+                s.id,
+                ipKey(s.cidr),
+                SCAN_LABEL[s.status],
+                TRIGGER[s.trigger ?? ""] ?? s.trigger,
+                s.hosts_alive,
+                s.hosts_ok,
+                s.hosts_failed,
+                seconds(s),
+                timeKey(s.requested_at),
+              ],
+              cells: (
+                <>
                   <th scope="row">
                     <Link href={`/escaneos/${s.id}`} className="row-link num">
                       {s.id}
@@ -129,10 +150,10 @@ export default async function EscaneosPage() {
                   <td>
                     <When iso={s.requested_at} />
                   </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </>
+              ),
+            }))}
+          />
         </TableRegion>
       ) : (
         <div className="panel">

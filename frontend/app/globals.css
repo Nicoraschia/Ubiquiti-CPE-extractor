@@ -232,27 +232,42 @@
     text-transform: uppercase;
     color: var(--muted);
   }
-  .data thead th:has(> a) {
+  .data thead th:has(> .sort) {
     padding: 0;
   }
-  .data thead th > a {
+  .sort {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    width: 100%;
     height: 30px;
     padding: 0 10px;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
     color: inherit;
     text-decoration: none;
+    cursor: pointer;
   }
-  .data thead th > a:hover,
+  /* La tabla recorta lo que sobresale: el foco se dibuja hacia adentro. */
+  .sort:focus-visible {
+    outline-offset: -2px;
+  }
+  .sort:hover,
   .data thead th[aria-sort] {
     color: var(--text);
   }
-  .data th[aria-sort="ascending"] > a::after {
-    content: "\2191";
+  .sort-icon {
+    flex: none;
+    fill: var(--faint);
   }
-  .data th[aria-sort="descending"] > a::after {
-    content: "\2193";
+  th[aria-sort="ascending"] .sort-icon .up,
+  th[aria-sort="descending"] .sort-icon .down {
+    fill: var(--text);
+  }
+  th[aria-sort="ascending"] .sort-icon .down,
+  th[aria-sort="descending"] .sort-icon .up {
+    opacity: 0.35;
   }
   .data tbody td,
   .data tbody th {
