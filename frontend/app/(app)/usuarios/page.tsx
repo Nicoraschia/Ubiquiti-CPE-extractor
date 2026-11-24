@@ -174,13 +174,13 @@ export default async function UsuariosPage() {
                             </SubmitButton>
                           </form>
                         )}
-                        <details className="relative">
+                        <details>
                           <summary className="btn btn-sm btn-ghost list-none">
                             Resetear clave
                           </summary>
                           <ActionForm
                             action={resetPassword}
-                            className="absolute right-0 z-20 mt-1 flex w-[280px] flex-col gap-2 rounded-lg border border-border-strong bg-surface p-3 text-left"
+                            className="mt-2 flex w-[280px] flex-col gap-2 whitespace-normal pb-2 text-left"
                           >
                             <input type="hidden" name="id" value={u.id} />
                             <div className="field">
